@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import {
   Clock3,
-  MailCheck,
-  MailPlus,
+  Filter,
+  Mail,
+  Search,
   Send,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
-import Button from "@/components/ui/Button";
 import ComposeEmailModal from "@/components/email/ComposeEmailModal";
 
 import { getCurrentUser, logout } from "@/lib/auth";
@@ -44,39 +42,28 @@ export default function DashboardPage() {
   const [stats, setStats] =
     useState<EmailStats | null>(null);
 
-  const [
-    scheduledEmails,
-    setScheduledEmails,
-  ] = useState<ScheduledEmail[]>([]);
+  const [scheduledEmails, setScheduledEmails] =
+    useState<ScheduledEmail[]>([]);
 
-  const [
-    sentEmails,
-    setSentEmails,
-  ] = useState<ScheduledEmail[]>([]);
+  const [sentEmails, setSentEmails] =
+    useState<ScheduledEmail[]>([]);
 
   const [composeOpen, setComposeOpen] =
     useState(false);
 
-  const [
-    emailsLoading,
-    setEmailsLoading,
-  ] = useState(true);
+  const [emailsLoading, setEmailsLoading] =
+    useState(true);
 
-  const [
-    backendOffline,
-    setBackendOffline,
-  ] = useState(false);
-
-  const [settingsOpen, setSettingsOpen] =
+  const [backendOffline, setBackendOffline] =
     useState(false);
 
-  /**
-   * Initial dashboard load.
-   */
+  const [search, setSearch] =
+    useState("");
+
   useEffect(() => {
     let mounted = true;
 
-    async function loadInitialDashboard() {
+    async function loadDashboard() {
       try {
         setLoading(true);
         setEmailsLoading(true);
@@ -85,11 +72,6 @@ export default function DashboardPage() {
           await getCurrentUser();
 
         if (!mounted) {
-          return;
-        }
-
-        if (!currentUser) {
-          setUser(null);
           return;
         }
 
@@ -130,18 +112,17 @@ export default function DashboardPage() {
       }
     }
 
-    loadInitialDashboard();
+    loadDashboard();
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  /**
-   * Poll dashboard email data.
-   *
-   * This allows newly scheduled/sent emails
-   * and updated statistics to appear automatically.
+  /*
+   * Keep the dashboard synchronized with the
+   * backend so scheduled → processing → sent
+   * changes appear automatically.
    */
   useEffect(() => {
     if (!user) {
@@ -150,7 +131,7 @@ export default function DashboardPage() {
 
     let mounted = true;
 
-    async function refreshEmailData() {
+    async function refreshDashboard() {
       try {
         const [
           emailStats,
@@ -182,21 +163,18 @@ export default function DashboardPage() {
       }
     }
 
-    const refreshInterval =
+    const interval =
       window.setInterval(
-        refreshEmailData,
+        refreshDashboard,
         3000,
       );
 
     return () => {
       mounted = false;
-      window.clearInterval(refreshInterval);
+      window.clearInterval(interval);
     };
   }, [user]);
 
-  /**
-   * Logout.
-   */
   async function handleLogout() {
     try {
       await logout();
@@ -205,12 +183,36 @@ export default function DashboardPage() {
     }
   }
 
-  /**
-   * Initial loading state.
-   */
+  const displayedEmails =
+    activeTab === "scheduled"
+      ? scheduledEmails
+      : sentEmails;
+
+  const filteredEmails = useMemo(() => {
+    const query =
+      search.trim().toLowerCase();
+
+    if (!query) {
+      return displayedEmails;
+    }
+
+    return displayedEmails.filter(
+      (email) =>
+        email.recipient
+          .toLowerCase()
+          .includes(query) ||
+        email.subject
+          .toLowerCase()
+          .includes(query) ||
+        email.sender.email
+          .toLowerCase()
+          .includes(query),
+    );
+  }, [displayedEmails, search]);
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex min-h-screen items-center justify-center bg-white">
         <div className="text-sm text-slate-500">
           Loading your workspace...
         </div>
@@ -218,236 +220,232 @@ export default function DashboardPage() {
     );
   }
 
-  /**
-   * If authentication failed, don't render
-   * the authenticated dashboard.
-   */
   if (!user) {
     return null;
   }
 
-  const displayedEmails =
-    activeTab === "scheduled"
-      ? scheduledEmails
-      : sentEmails;
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Header
-        user={{
-          ...user,
-          avatar:
-            user.avatar ?? undefined,
-        }}
-        onLogout={handleLogout}
-      />
+    <div className="min-h-screen bg-white text-slate-900">
+      <div className="flex min-h-screen">
 
-      <div className="flex">
+        {/* Sidebar */}
         <Sidebar
           activeTab={activeTab}
-          onTabChange={setActiveTab}
-          settingsOpen={settingsOpen}
-          onSettingsChange={setSettingsOpen}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setSearch("");
+          }}
+          onCompose={() =>
+            setComposeOpen(true)
+          }
+          user={{
+            name: user.name,
+            email: user.email,
+            avatar:
+              user.avatar ?? undefined,
+          }}
+          scheduledCount={
+            stats?.scheduled ?? 0
+          }
+          sentCount={stats?.sent ?? 0}
+          onLogout={handleLogout}
         />
 
-        <main className="min-w-0 flex-1 p-6 lg:p-8">
+        {/* Main */}
+        <main className="min-w-0 flex-1 bg-white">
+
+          {/* Mobile top bar */}
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 lg:hidden">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
+                <Mail className="h-4 w-4 text-white" />
+              </div>
+
+              <span className="font-semibold text-slate-900">
+                ReachInbox
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setComposeOpen(true)
+              }
+              className="rounded-full border border-emerald-500 px-4 py-2 text-xs font-medium text-emerald-600"
+            >
+              Compose
+            </button>
+          </div>
+
+          {/* Backend warning */}
           {backendOffline && (
-            <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mx-5 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 lg:mx-8">
               Backend temporarily unavailable.
               Retrying automatically...
             </div>
           )}
 
-          <div className="mx-auto max-w-7xl">
-            {/* Dashboard Header */}
-            <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-              <div>
-                <p className="mb-1 text-sm font-medium text-indigo-600">
-                  Workspace
-                </p>
+          <div className="mx-auto min-h-screen max-w-[1400px]">
 
-                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-                  Email Dashboard
-                </h2>
+            {/* Toolbar */}
+            <div className="flex h-[72px] items-center gap-4 border-b border-slate-200 px-5 lg:px-8">
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Manage and monitor your scheduled emails.
-                </p>
+              <div className="relative flex-1 max-w-[620px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="Search"
+                  className="h-10 w-full rounded-lg border border-transparent bg-slate-50 pl-10 pr-4 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-slate-200 focus:bg-white"
+                />
               </div>
 
-              <Button
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                title="Filter"
+              >
+                <Filter className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
                 onClick={() =>
                   setComposeOpen(true)
                 }
+                className="hidden rounded-full border border-emerald-500 px-4 py-2 text-sm font-medium text-emerald-600 transition hover:bg-emerald-50 lg:block"
               >
-                <span className="flex items-center gap-2">
-                  <MailPlus className="h-4 w-4" />
-                  Compose New Email
-                </span>
-              </Button>
+                Compose
+              </button>
             </div>
 
-            <ComposeEmailModal
-              open={composeOpen}
-              onClose={() =>
-                setComposeOpen(false)
-              }
-              onScheduled={() => {
-                // Dashboard polling refreshes the data.
-              }}
-            />
-
-            {/* Statistics */}
-            <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
+            {/* Mobile tabs */}
+            <div className="flex border-b border-slate-200 px-5 lg:hidden">
+              <TabButton
+                active={
+                  activeTab === "scheduled"
+                }
+                icon={
+                  <Clock3 className="h-4 w-4" />
+                }
                 label="Scheduled"
-                value={String(
-                  stats?.scheduled ?? 0,
-                )}
-                icon={
-                  <Clock3 className="h-5 w-5" />
+                onClick={() =>
+                  setActiveTab("scheduled")
                 }
               />
 
-              <StatCard
+              <TabButton
+                active={
+                  activeTab === "sent"
+                }
+                icon={
+                  <Send className="h-4 w-4" />
+                }
                 label="Sent"
-                value={String(
-                  stats?.sent ?? 0,
-                )}
-                icon={
-                  <Send className="h-5 w-5" />
-                }
-              />
-
-              <StatCard
-                label="Failed"
-                value={String(
-                  stats?.failed ?? 0,
-                )}
-                icon={
-                  <MailCheck className="h-5 w-5" />
-                }
-              />
-
-              <StatCard
-                label="Total Emails"
-                value={String(
-                  stats?.total ?? 0,
-                )}
-                icon={
-                  <MailPlus className="h-5 w-5" />
+                onClick={() =>
+                  setActiveTab("sent")
                 }
               />
             </div>
 
-            {/* Scheduled / Sent Email Table */}
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-6 pt-4">
-                <div className="flex gap-6">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActiveTab(
-                        "scheduled",
-                      )
-                    }
-                    className={`border-b-2 pb-3 text-sm font-medium ${
-                      activeTab ===
-                      "scheduled"
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    Scheduled Emails
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setActiveTab("sent")
-                    }
-                    className={`border-b-2 pb-3 text-sm font-medium ${
-                      activeTab === "sent"
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    Sent Emails
-                  </button>
-                </div>
-              </div>
-
+            {/* Email list */}
+            <section>
               {emailsLoading ? (
-                <div className="flex min-h-75 items-center justify-center">
-                  <p className="text-sm text-slate-500">
+                <div className="flex min-h-[420px] items-center justify-center">
+                  <p className="text-sm text-slate-400">
                     Loading emails...
                   </p>
                 </div>
               ) : (
-                <EmailTable
-                  emails={displayedEmails}
+                <EmailList
+                  emails={filteredEmails}
                   type={activeTab}
+                  search={search}
                 />
               )}
             </section>
           </div>
         </main>
       </div>
+
+      {/* Compose */}
+      <ComposeEmailModal
+        open={composeOpen}
+        onClose={() =>
+          setComposeOpen(false)
+        }
+        onScheduled={() => {
+          setComposeOpen(false);
+        }}
+      />
     </div>
   );
 }
 
-/**
- * Dashboard statistic card.
- */
-function StatCard({
-  label,
-  value,
+function TabButton({
+  active,
   icon,
+  label,
+  onClick,
 }: {
-  label: string;
-  value: string;
+  active: boolean;
   icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600">
-          {icon}
-        </div>
-      </div>
-
-      <p className="text-sm text-slate-500">
-        {label}
-      </p>
-
-      <p className="mt-1 text-2xl font-bold text-slate-900">
-        {value}
-      </p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm ${
+        active
+          ? "border-emerald-500 font-semibold text-slate-900"
+          : "border-transparent text-slate-500"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
-/**
- * Scheduled / Sent email table.
- */
-function EmailTable({
+function EmailList({
   emails,
   type,
+  search,
 }: {
   emails: ScheduledEmail[];
   type: "scheduled" | "sent";
+  search: string;
 }) {
   if (emails.length === 0) {
     return (
-      <div className="flex min-h-75 items-center justify-center">
+      <div className="flex min-h-[500px] items-center justify-center px-6">
         <div className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+            {type === "scheduled" ? (
+              <Clock3 className="h-5 w-5 text-slate-400" />
+            ) : (
+              <Send className="h-5 w-5 text-slate-400" />
+            )}
+          </div>
+
           <h3 className="text-sm font-semibold text-slate-900">
-            No {type} emails
+            {search
+              ? "No matching emails"
+              : `No ${type} emails`}
           </h3>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Your emails will appear here.
+          <p className="mt-1 text-sm text-slate-400">
+            {search
+              ? "Try a different search."
+              : "Your emails will appear here."}
           </p>
         </div>
       </div>
@@ -455,76 +453,97 @@ function EmailTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-175 text-left">
-        <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-            <th className="px-6 py-4 font-medium">
-              Recipient
-            </th>
-
-            <th className="px-6 py-4 font-medium">
-              Subject
-            </th>
-
-            <th className="px-6 py-4 font-medium">
-              Sender
-            </th>
-
-            <th className="px-6 py-4 font-medium">
-              {type === "scheduled"
-                ? "Scheduled At"
-                : "Sent At"}
-            </th>
-
-            <th className="px-6 py-4 font-medium">
-              Status
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {emails.map((email) => (
-            <tr
-              key={email.id}
-              className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
-            >
-              <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                {email.recipient}
-              </td>
-
-              <td className="max-w-62.5 truncate px-6 py-4 text-sm text-slate-600">
-                {email.subject}
-              </td>
-
-              <td className="px-6 py-4 text-sm text-slate-600">
-                {email.sender.email}
-              </td>
-
-              <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                {formatDate(
-                  type === "scheduled"
-                    ? email.scheduledAt
-                    : email.sentAt,
-                )}
-              </td>
-
-              <td className="px-6 py-4">
-                <StatusBadge
-                  status={email.status}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="divide-y divide-slate-100">
+      {emails.map((email) => (
+        <EmailRow
+          key={email.id}
+          email={email}
+          type={type}
+        />
+      ))}
     </div>
   );
 }
 
-/**
- * Email status badge.
- */
+function EmailRow({
+  email,
+  type,
+}: {
+  email: ScheduledEmail;
+  type: "scheduled" | "sent";
+}) {
+  const date =
+    type === "scheduled"
+      ? email.scheduledAt
+      : email.sentAt;
+
+  return (
+    <article className="group flex min-h-[82px] items-center gap-4 px-5 py-4 transition hover:bg-slate-50 lg:px-8">
+
+      {/* Status icon */}
+      <div
+        className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-full sm:flex ${
+          type === "scheduled"
+            ? "bg-amber-50 text-amber-500"
+            : "bg-emerald-50 text-emerald-500"
+        }`}
+      >
+        {type === "scheduled" ? (
+          <Clock3 className="h-4 w-4" />
+        ) : (
+          <Send className="h-4 w-4" />
+        )}
+      </div>
+
+      {/* Email content */}
+      <div className="min-w-0 flex-1">
+
+        {/* Recipient */}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-slate-500">
+            To:
+          </span>
+
+          <span className="truncate text-sm font-semibold text-slate-800">
+            {email.recipient}
+          </span>
+        </div>
+
+        {/* Subject */}
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-slate-700">
+            {email.subject}
+          </span>
+
+          <span className="hidden truncate text-sm text-slate-400 md:block">
+            — {email.body.replace(/\s+/g, " ").slice(0, 90)}
+          </span>
+        </div>
+      </div>
+
+      {/* Date */}
+      <div className="hidden shrink-0 text-right sm:block">
+        <p className="text-xs text-slate-400">
+          {formatDate(date)}
+        </p>
+
+        <div className="mt-1">
+          <StatusBadge
+            status={email.status}
+          />
+        </div>
+      </div>
+
+      {/* Mobile status */}
+      <div className="sm:hidden">
+        <StatusBadge
+          status={email.status}
+        />
+      </div>
+    </article>
+  );
+}
+
 function StatusBadge({
   status,
 }: {
@@ -535,35 +554,28 @@ function StatusBadge({
     string
   > = {
     SCHEDULED:
-      "bg-blue-50 text-blue-700",
-
+      "bg-amber-50 text-amber-600",
     PROCESSING:
-      "bg-yellow-50 text-yellow-700",
-
+      "bg-blue-50 text-blue-600",
     SENT:
-      "bg-green-50 text-green-700",
-
+      "bg-emerald-50 text-emerald-600",
     FAILED:
-      "bg-red-50 text-red-700",
-
+      "bg-red-50 text-red-600",
     CANCELLED:
-      "bg-slate-100 text-slate-600",
+      "bg-slate-100 text-slate-500",
   };
 
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-medium ${classes[status]}`}
+      className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${classes[status]}`}
     >
-      {status}
+      {status.toLowerCase()}
     </span>
   );
 }
 
-/**
- * Format ISO dates for the dashboard.
- */
 function formatDate(
-  value: string | null,
+  value: string | null | undefined,
 ) {
   if (!value) {
     return "—";
@@ -572,8 +584,10 @@ function formatDate(
   return new Intl.DateTimeFormat(
     "en-IN",
     {
-      dateStyle: "medium",
-      timeStyle: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     },
   ).format(new Date(value));
 }
