@@ -1,11 +1,14 @@
-import IORedis from "ioredis";
+import RedisModule from "ioredis";
 
-const redisHost = process.env.REDIS_HOST ?? "localhost";
-const redisPort = Number(process.env.REDIS_PORT ?? 6379);
+const Redis = RedisModule.default ?? RedisModule;
 
-export const redis = new IORedis.default({
-  host: redisHost,
-  port: redisPort,
+const redisUrl = process.env.REDIS_URL;
+
+if (!redisUrl) {
+  throw new Error("REDIS_URL is not defined");
+}
+
+export const redis = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
 });
 
@@ -13,6 +16,6 @@ redis.on("connect", () => {
   console.log("✅ Redis connected");
 });
 
-redis.on("error", (error) => {
+redis.on("error", (error: Error) => {
   console.error("❌ Redis error:", error);
 });
