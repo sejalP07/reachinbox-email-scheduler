@@ -13,6 +13,7 @@ import authRoutes from "./routes/auth.routes.js";
 import emailRoutes from "./routes/email.routes.js";
 import healthRoutes from "./routes/health.routes.js";
 
+
 const pinoHttp = pinoHttpModule.default ?? pinoHttpModule;
 
 const app = express();
@@ -96,6 +97,7 @@ app.get("/health", (_req, res) => {
 app.use("/health", healthRoutes);
 
 app.use("/api/auth", authRoutes);
+
 
 app.use("/api/emails", emailRoutes);
 

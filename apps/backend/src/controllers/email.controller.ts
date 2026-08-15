@@ -274,3 +274,92 @@ export async function getSendersController(
     });
   }
 }
+
+
+export async function createSenderController(
+  req: Request,
+  res: Response,
+) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
+
+    const email =
+      typeof req.body.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+
+    const name =
+      typeof req.body.name === "string"
+        ? req.body.name.trim()
+        : null;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "Sender email is required",
+      });
+    }
+
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid sender email",
+      });
+    }
+
+    const existingSender =
+      await prisma.sender.findUnique({
+        where: {
+          userId_email: {
+            userId: req.user.id,
+            email,
+          },
+        },
+      });
+
+    if (existingSender) {
+      return res.status(409).json({
+        success: false,
+        error: "This sender is already added",
+      });
+    }
+
+    const sender =
+      await prisma.sender.create({
+        data: {
+          userId: req.user.id,
+          email,
+          name: name || null,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+        },
+      });
+
+    return res.status(201).json({
+      success: true,
+      data: sender,
+    });
+  } catch (error) {
+    console.error(
+      "Create sender error:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+    });
+  }
+}

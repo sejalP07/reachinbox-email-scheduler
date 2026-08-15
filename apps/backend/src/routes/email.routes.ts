@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import {
+  createSenderController,
   getEmailStatsController,
   getScheduledEmailsController,
   getSentEmailsController,
@@ -38,6 +39,14 @@ router.get(
 
 router.get(
   "/senders",
+  requireAuth,
   getSendersController,
 );
+
+router.post(
+  "/senders",
+  requireAuth,
+  createSenderController,
+);
+
 export default router;

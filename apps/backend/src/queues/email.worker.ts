@@ -177,59 +177,6 @@ if (!rateLimit.allowed) {
     };
   }
 
-    
-    /*
-     * The send slot has now been reserved.
-     * It is safe to mark the email as PROCESSING.
-     */
-    const processingEmailAfterRateLimit =
-        await prisma.scheduledEmail.updateMany({
-            where: {
-            id: scheduledEmailId,
-            status: "SCHEDULED",
-            },
-            data: {
-            status: "PROCESSING",
-            attempts: {
-                increment: 1,
-            },
-            },
-        });
-
-        if (processingEmailAfterRateLimit.count === 0) {
-        const currentEmail =
-            await prisma.scheduledEmail.findUnique({
-            where: {
-                id: scheduledEmailId,
-            },
-            });
-
-        if (currentEmail?.status === "SENT") {
-            console.log(
-            `⚠️ Email ${scheduledEmailId} already sent. Skipping.`,
-            );
-
-            return {
-            skipped: true,
-            reason: "already-sent",
-            };
-        }
-
-        if (currentEmail?.status === "PROCESSING") {
-            console.log(
-            `⚠️ Email ${scheduledEmailId} is already being processed. Skipping duplicate worker execution.`,
-            );
-
-            return {
-            skipped: true,
-            reason: "already-processing",
-            };
-        }
-
-        throw new Error(
-            `Unable to acquire processing lock for ${scheduledEmailId}`,
-        );
-    }
 
     try {
       const info = await sendEmail({

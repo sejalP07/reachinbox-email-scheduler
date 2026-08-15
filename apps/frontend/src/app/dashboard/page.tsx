@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import {
   Clock3,
   MailCheck,
@@ -14,6 +15,7 @@ import Button from "@/components/ui/Button";
 import ComposeEmailModal from "@/components/email/ComposeEmailModal";
 
 import { getCurrentUser, logout } from "@/lib/auth";
+
 import {
   getEmailStats,
   getScheduledEmails,
@@ -21,6 +23,7 @@ import {
 } from "@/lib/emails";
 
 import type { User } from "@/types/user";
+
 import type {
   EmailStats,
   ScheduledEmail,
@@ -40,20 +43,36 @@ export default function DashboardPage() {
 
   const [stats, setStats] =
     useState<EmailStats | null>(null);
-  const [backendOffline, setBackendOffline] =
-    useState(false);
-  const [scheduledEmails, setScheduledEmails] =
-    useState<ScheduledEmail[]>([]);
 
-  const [sentEmails, setSentEmails] =
-    useState<ScheduledEmail[]>([]);
+  const [
+    scheduledEmails,
+    setScheduledEmails,
+  ] = useState<ScheduledEmail[]>([]);
+
+  const [
+    sentEmails,
+    setSentEmails,
+  ] = useState<ScheduledEmail[]>([]);
 
   const [composeOpen, setComposeOpen] =
-  useState(false);
+    useState(false);
 
-  const [emailsLoading, setEmailsLoading] =
-    useState(true);
+  const [
+    emailsLoading,
+    setEmailsLoading,
+  ] = useState(true);
 
+  const [
+    backendOffline,
+    setBackendOffline,
+  ] = useState(false);
+
+  const [settingsOpen, setSettingsOpen] =
+    useState(false);
+
+  /**
+   * Initial dashboard load.
+   */
   useEffect(() => {
     let mounted = true;
 
@@ -62,9 +81,15 @@ export default function DashboardPage() {
         setLoading(true);
         setEmailsLoading(true);
 
-        const currentUser = await getCurrentUser();
+        const currentUser =
+          await getCurrentUser();
 
         if (!mounted) {
+          return;
+        }
+
+        if (!currentUser) {
+          setUser(null);
           return;
         }
 
@@ -87,14 +112,16 @@ export default function DashboardPage() {
         setStats(emailStats);
         setScheduledEmails(scheduled);
         setSentEmails(sent);
+        setBackendOffline(false);
       } catch (error) {
         console.error(
           "Failed to load dashboard:",
           error,
         );
 
-        // Do not immediately redirect.
-        // Keep the user on the dashboard.
+        if (mounted) {
+          setBackendOffline(true);
+        }
       } finally {
         if (mounted) {
           setLoading(false);
@@ -110,6 +137,12 @@ export default function DashboardPage() {
     };
   }, []);
 
+  /**
+   * Poll dashboard email data.
+   *
+   * This allows newly scheduled/sent emails
+   * and updated statistics to appear automatically.
+   */
   useEffect(() => {
     if (!user) {
       return;
@@ -137,9 +170,14 @@ export default function DashboardPage() {
         setScheduledEmails(scheduled);
         setSentEmails(sent);
         setBackendOffline(false);
-      } catch {
-      if (mounted) {
-        setBackendOffline(true);
+      } catch (error) {
+        console.error(
+          "Failed to refresh dashboard:",
+          error,
+        );
+
+        if (mounted) {
+          setBackendOffline(true);
         }
       }
     }
@@ -155,6 +193,10 @@ export default function DashboardPage() {
       window.clearInterval(refreshInterval);
     };
   }, [user]);
+
+  /**
+   * Logout.
+   */
   async function handleLogout() {
     try {
       await logout();
@@ -163,6 +205,9 @@ export default function DashboardPage() {
     }
   }
 
+  /**
+   * Initial loading state.
+   */
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -173,6 +218,10 @@ export default function DashboardPage() {
     );
   }
 
+  /**
+   * If authentication failed, don't render
+   * the authenticated dashboard.
+   */
   if (!user) {
     return null;
   }
@@ -185,7 +234,11 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Header
-        user={{ ...user, avatar: user.avatar ?? undefined }}
+        user={{
+          ...user,
+          avatar:
+            user.avatar ?? undefined,
+        }}
         onLogout={handleLogout}
       />
 
@@ -193,17 +246,20 @@ export default function DashboardPage() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          settingsOpen={settingsOpen}
+          onSettingsChange={setSettingsOpen}
         />
 
         <main className="min-w-0 flex-1 p-6 lg:p-8">
-            {backendOffline && (
+          {backendOffline && (
             <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Backend temporarily unavailable. Retrying automatically...
+              Backend temporarily unavailable.
+              Retrying automatically...
             </div>
           )}
-          <div className="mx-auto max-w-7xl">
 
-            {/* Header */}
+          <div className="mx-auto max-w-7xl">
+            {/* Dashboard Header */}
             <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <p className="mb-1 text-sm font-medium text-indigo-600">
@@ -215,26 +271,33 @@ export default function DashboardPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Manage and monitor your email campaigns.
+                  Manage and monitor your scheduled emails.
                 </p>
               </div>
 
-              <Button onClick={() => setComposeOpen(true)}>
+              <Button
+                onClick={() =>
+                  setComposeOpen(true)
+                }
+              >
                 <span className="flex items-center gap-2">
                   <MailPlus className="h-4 w-4" />
                   Compose New Email
                 </span>
               </Button>
-              <ComposeEmailModal
-                open={composeOpen}
-                onClose={() => setComposeOpen(false)}
-                onScheduled={() => {
-                  // The polling interval will pick up the new scheduled email.
-                }}
-              />
             </div>
 
-            {/* Stats */}
+            <ComposeEmailModal
+              open={composeOpen}
+              onClose={() =>
+                setComposeOpen(false)
+              }
+              onScheduled={() => {
+                // Dashboard polling refreshes the data.
+              }}
+            />
+
+            {/* Statistics */}
             <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 label="Scheduled"
@@ -277,32 +340,36 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Email table */}
+            {/* Scheduled / Sent Email Table */}
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-
               <div className="border-b border-slate-200 px-6 pt-4">
                 <div className="flex gap-6">
                   <button
+                    type="button"
                     onClick={() =>
-                      setActiveTab("scheduled")
+                      setActiveTab(
+                        "scheduled",
+                      )
                     }
                     className={`border-b-2 pb-3 text-sm font-medium ${
-                      activeTab === "scheduled"
+                      activeTab ===
+                      "scheduled"
                         ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                   >
                     Scheduled Emails
                   </button>
 
                   <button
+                    type="button"
                     onClick={() =>
                       setActiveTab("sent")
                     }
                     className={`border-b-2 pb-3 text-sm font-medium ${
                       activeTab === "sent"
                         ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                   >
                     Sent Emails
@@ -330,6 +397,9 @@ export default function DashboardPage() {
   );
 }
 
+/**
+ * Dashboard statistic card.
+ */
 function StatCard({
   label,
   value,
@@ -358,6 +428,9 @@ function StatCard({
   );
 }
 
+/**
+ * Scheduled / Sent email table.
+ */
 function EmailTable({
   emails,
   type,
@@ -449,20 +522,30 @@ function EmailTable({
   );
 }
 
+/**
+ * Email status badge.
+ */
 function StatusBadge({
   status,
 }: {
   status: ScheduledEmail["status"];
 }) {
-  const classes = {
+  const classes: Record<
+    ScheduledEmail["status"],
+    string
+  > = {
     SCHEDULED:
       "bg-blue-50 text-blue-700",
+
     PROCESSING:
       "bg-yellow-50 text-yellow-700",
+
     SENT:
       "bg-green-50 text-green-700",
+
     FAILED:
       "bg-red-50 text-red-700",
+
     CANCELLED:
       "bg-slate-100 text-slate-600",
   };
@@ -476,6 +559,9 @@ function StatusBadge({
   );
 }
 
+/**
+ * Format ISO dates for the dashboard.
+ */
 function formatDate(
   value: string | null,
 ) {
