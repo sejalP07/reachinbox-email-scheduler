@@ -6,8 +6,10 @@ declare module "express-session" {
   }
 }
 
-declare global {
-  namespace Express {
-    interface User extends PrismaUser {}
+import "express-session";
+
+declare module "express-session" {
+  interface SessionData {
+    // Keep this empty unless your application has custom session fields.
   }
 }
