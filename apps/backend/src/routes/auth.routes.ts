@@ -8,6 +8,9 @@ import {
 
 const router = Router();
 
+const FRONTEND_URL =
+  process.env.FRONTEND_URL ?? "http://localhost:3000";
+
 router.get(
   "/google",
   passport.authenticate("google", {
@@ -18,10 +21,10 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: "/login?error=google_auth_failed",
+    failureRedirect: `${FRONTEND_URL}/login?error=google_auth_failed`,
   }),
-  (req, res) => {
-    res.redirect("http://localhost:3000/dashboard");
+  (_req, res) => {
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   },
 );
 
