@@ -47,23 +47,36 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:5000";
 
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
 function getTomorrowDate() {
   const date = new Date();
-  date.setDate(date.getDate() + 1);
+
+  date.setDate(
+    date.getDate() + 1,
+  );
+
   return date;
 }
 
 function toLocalDateTime(date: Date) {
-  const year = date.getFullYear();
+  const year =
+    date.getFullYear();
+
   const month = String(
     date.getMonth() + 1,
   ).padStart(2, "0");
+
   const day = String(
     date.getDate(),
   ).padStart(2, "0");
+
   const hours = String(
     date.getHours(),
   ).padStart(2, "0");
+
   const minutes = String(
     date.getMinutes(),
   ).padStart(2, "0");
@@ -72,9 +85,15 @@ function toLocalDateTime(date: Date) {
 }
 
 function tomorrowAt(hour: number) {
-  const date = getTomorrowDate();
+  const date =
+    getTomorrowDate();
 
-  date.setHours(hour, 0, 0, 0);
+  date.setHours(
+    hour,
+    0,
+    0,
+    0,
+  );
 
   return toLocalDateTime(date);
 }
@@ -88,7 +107,11 @@ function formatScheduleLabel(
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return "Pick date & time";
   }
 
@@ -103,6 +126,10 @@ function formatScheduleLabel(
     },
   ).format(date);
 }
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
 
 export default function ComposeEmailModal({
   open,
@@ -154,10 +181,10 @@ export default function ComposeEmailModal({
   const leadFileInputRef =
     useRef<HTMLInputElement>(null);
 
-  /*
-   * Load available senders whenever
-   * the composer opens.
-   */
+  /* =========================================================
+     LOAD SENDERS
+  ========================================================= */
+
   useEffect(() => {
     if (!open) {
       return;
@@ -168,12 +195,13 @@ export default function ComposeEmailModal({
         setLoadingSenders(true);
         setError("");
 
-        const response = await fetch(
-          `${API_URL}/api/emails/senders`,
-          {
-            credentials: "include",
-          },
-        );
+        const response =
+          await fetch(
+            `${API_URL}/api/emails/senders`,
+            {
+              credentials: "include",
+            },
+          );
 
         const result =
           await response.json();
@@ -188,9 +216,13 @@ export default function ComposeEmailModal({
         const senderList: Sender[] =
           result.data ?? [];
 
-        setSenders(senderList);
+        setSenders(
+          senderList,
+        );
 
-        if (senderList.length > 0) {
+        if (
+          senderList.length > 0
+        ) {
           setSenderId(
             senderList[0]!.id,
           );
@@ -215,9 +247,10 @@ export default function ComposeEmailModal({
     loadSenders();
   }, [open]);
 
-  /*
-   * Sync editor content when opening.
-   */
+  /* =========================================================
+     SYNC EDITOR
+  ========================================================= */
+
   useEffect(() => {
     if (!open) {
       return;
@@ -233,30 +266,32 @@ export default function ComposeEmailModal({
     return null;
   }
 
-  /*
-   * Parse recipients from the internal
-   * newline/comma separated value.
-   */
+  /* =========================================================
+     RECIPIENT HELPERS
+  ========================================================= */
+
   function getRecipientList() {
     return [
       ...new Set(
         recipients
           .split(/[\n,]+/)
           .map((email) =>
-            email.trim().toLowerCase(),
+            email
+              .trim()
+              .toLowerCase(),
           )
           .filter(Boolean),
       ),
     ];
   }
 
-  /*
-   * Add an individual recipient.
-   */
-  function addRecipient(value: string) {
-    const email = value
-      .trim()
-      .toLowerCase();
+  function addRecipient(
+    value: string,
+  ) {
+    const email =
+      value
+        .trim()
+        .toLowerCase();
 
     if (!email) {
       return;
@@ -273,21 +308,22 @@ export default function ComposeEmailModal({
     }
 
     setRecipients(
-      [...existing, email].join("\n"),
+      [
+        ...existing,
+        email,
+      ].join("\n"),
     );
 
     setRecipientInput("");
   }
 
-  /*
-   * Remove a recipient.
-   */
   function removeRecipient(
     email: string,
   ) {
     const updated =
       getRecipientList().filter(
-        (item) => item !== email,
+        (item) =>
+          item !== email,
       );
 
     setRecipients(
@@ -295,9 +331,6 @@ export default function ComposeEmailModal({
     );
   }
 
-  /*
-   * Enter/comma creates recipient chip.
-   */
   function handleRecipientKeyDown(
     event: React.KeyboardEvent<HTMLInputElement>,
   ) {
@@ -328,9 +361,10 @@ export default function ComposeEmailModal({
     }
   }
 
-  /*
-   * CSV/TXT lead upload.
-   */
+  /* =========================================================
+     CSV / TXT UPLOAD
+  ========================================================= */
+
   function handleLeadFile(
     event: React.ChangeEvent<HTMLInputElement>,
   ) {
@@ -370,10 +404,11 @@ export default function ComposeEmailModal({
 
       const uniqueEmails = [
         ...new Set(
-          emails.map((email) =>
-            email
-              .trim()
-              .toLowerCase(),
+          emails.map(
+            (email) =>
+              email
+                .trim()
+                .toLowerCase(),
           ),
         ),
       ];
@@ -404,10 +439,6 @@ export default function ComposeEmailModal({
 
       setError("");
 
-      /*
-       * Allow uploading the same file
-       * again later.
-       */
       event.target.value = "";
     };
 
@@ -420,9 +451,10 @@ export default function ComposeEmailModal({
     reader.readAsText(file);
   }
 
-  /*
-   * Update body from rich text editor.
-   */
+  /* =========================================================
+     EDITOR
+  ========================================================= */
+
   function handleEditorInput() {
     const html =
       editorRef.current
@@ -431,10 +463,9 @@ export default function ComposeEmailModal({
     setBody(html);
   }
 
-  /*
-   * Basic formatting toolbar.
-   */
-  function format(command: string) {
+  function format(
+    command: string,
+  ) {
     editorRef.current?.focus();
 
     document.execCommand(
@@ -445,9 +476,6 @@ export default function ComposeEmailModal({
     handleEditorInput();
   }
 
-  /*
-   * Insert a link.
-   */
   function insertLink() {
     const url =
       window.prompt(
@@ -470,9 +498,10 @@ export default function ComposeEmailModal({
     handleEditorInput();
   }
 
-  /*
-   * Submit / schedule email campaign.
-   */
+  /* =========================================================
+     SUBMIT
+  ========================================================= */
+
   async function handleSubmit(
     event?: React.FormEvent,
   ) {
@@ -480,14 +509,12 @@ export default function ComposeEmailModal({
 
     setError("");
 
-    /*
-     * If the user typed a recipient but
-     * didn't press Enter, add it now.
-     */
     let finalRecipients =
       getRecipientList();
 
-    if (recipientInput.trim()) {
+    if (
+      recipientInput.trim()
+    ) {
       const pending =
         recipientInput
           .trim()
@@ -520,7 +547,8 @@ export default function ComposeEmailModal({
     }
 
     if (
-      finalRecipients.length === 0
+      finalRecipients.length ===
+      0
     ) {
       setError(
         "Add at least one recipient.",
@@ -549,14 +577,10 @@ export default function ComposeEmailModal({
     }
 
     /*
-     * Send button:
-     * if no future schedule was selected,
-     * schedule it one minute from now.
-     *
-     * This keeps compatibility with the
-     * backend requirement that startTime
-     * must be in the future.
+     * If no schedule was selected,
+     * send one minute from now.
      */
+
     let selectedStartTime =
       startTime;
 
@@ -599,7 +623,9 @@ export default function ComposeEmailModal({
               delayMs:
                 Number(delayMs),
               hourlyLimit:
-                Number(hourlyLimit),
+                Number(
+                  hourlyLimit,
+                ),
             }),
           },
         );
@@ -617,6 +643,7 @@ export default function ComposeEmailModal({
       onScheduled?.();
 
       resetComposer();
+
       onClose();
     } catch (error) {
       setError(
@@ -629,9 +656,10 @@ export default function ComposeEmailModal({
     }
   }
 
-  /*
-   * Reset all compose state.
-   */
+  /* =========================================================
+     RESET
+  ========================================================= */
+
   function resetComposer() {
     setSenderId(
       senders[0]?.id ?? "",
@@ -653,9 +681,10 @@ export default function ComposeEmailModal({
     }
   }
 
-  /*
-   * Close composer.
-   */
+  /* =========================================================
+     CLOSE
+  ========================================================= */
+
   function handleClose() {
     if (submitting) {
       return;
@@ -664,10 +693,10 @@ export default function ComposeEmailModal({
     onClose();
   }
 
-  /*
-   * Pick schedule from the Send Later
-   * menu.
-   */
+  /* =========================================================
+     SCHEDULE
+  ========================================================= */
+
   function selectSchedule(
     value: string,
   ) {
@@ -676,15 +705,23 @@ export default function ComposeEmailModal({
     setError("");
   }
 
+  /* =========================================================
+     UI
+  ========================================================= */
+
   return (
     <div className="fixed inset-0 z-100 overflow-hidden bg-white">
 
-      {/* ================= HEADER ================= */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <header className="flex h-15 items-center justify-between border-b border-slate-200 px-5 lg:px-7">
 
-        {/* Left */}
+        {/* LEFT */}
+
         <div className="flex min-w-0 items-center gap-3">
+
           <button
             type="button"
             onClick={handleClose}
@@ -698,12 +735,15 @@ export default function ComposeEmailModal({
           <h1 className="truncate text-[20px] font-medium text-slate-800">
             Compose New Email
           </h1>
+
         </div>
 
-        {/* Right */}
+        {/* RIGHT */}
+
         <div className="relative flex items-center gap-3">
 
-          {/* Attachment */}
+          {/* UPLOAD */}
+
           <button
             type="button"
             onClick={() =>
@@ -715,7 +755,8 @@ export default function ComposeEmailModal({
             <Paperclip className="h-4.5 w-4.5" />
           </button>
 
-          {/* Send later */}
+          {/* SEND LATER */}
+
           <button
             type="button"
             onClick={() =>
@@ -734,7 +775,8 @@ export default function ComposeEmailModal({
             <Clock3 className="h-4.5 w-4.5" />
           </button>
 
-          {/* Send */}
+          {/* SEND */}
+
           <button
             type="button"
             onClick={() =>
@@ -753,19 +795,27 @@ export default function ComposeEmailModal({
               : "Send"}
           </button>
 
-          {/* Hidden upload */}
+          {/* HIDDEN FILE INPUT */}
+
           <input
-            ref={leadFileInputRef}
+            ref={
+              leadFileInputRef
+            }
             type="file"
-            accept=".csv,.txt"
-            onChange={handleLeadFile}
+            accept=".csv,.txt,text/csv,text/plain"
+            onChange={
+              handleLeadFile
+            }
             className="hidden"
           />
 
-          {/* Send later popup */}
+          {/* SEND LATER */}
+
           {showSchedule && (
             <SendLaterPanel
-              startTime={startTime}
+              startTime={
+                startTime
+              }
               onSelect={
                 selectSchedule
               }
@@ -777,20 +827,26 @@ export default function ComposeEmailModal({
               }
             />
           )}
+
         </div>
       </header>
 
-      {/* ================= CONTENT ================= */}
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
 
       <main className="h-[calc(100vh-60px)] overflow-y-auto bg-white">
 
-        <div className="mx-auto w-full 
-         px-5 pb-20 pt-7 lg:px-8">
+        <div className="mx-auto w-full px-5 pb-20 pt-7 lg:px-8">
 
-          {/* Error */}
+          {/* ERROR */}
+
           {error && (
             <div className="mb-5 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <span>{error}</span>
+
+              <span>
+                {error}
+              </span>
 
               <button
                 type="button"
@@ -801,30 +857,42 @@ export default function ComposeEmailModal({
               >
                 <X className="h-4 w-4" />
               </button>
+
             </div>
           )}
 
-          {/* ================= EMAIL HEADER ================= */}
+          {/* =================================================
+              EMAIL HEADER
+          ================================================= */}
 
           <div className="divide-y divide-slate-100">
 
             {/* FROM */}
+
             <div className="flex min-h-12 items-center">
+
               <div className="w-18 shrink-0 text-[13px] font-medium text-slate-700">
                 From
               </div>
 
               <div className="relative">
+
                 <select
-                  value={senderId}
-                  onChange={(event) =>
+                  value={
+                    senderId
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setSenderId(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
                   disabled={
                     loadingSenders ||
-                    senders.length === 0
+                    senders.length ===
+                      0
                   }
                   className="appearance-none rounded-lg border-0 bg-slate-100 py-2 pl-3 pr-9 text-[13px] text-slate-700 outline-none focus:ring-1 focus:ring-slate-200 disabled:opacity-60"
                 >
@@ -835,7 +903,9 @@ export default function ComposeEmailModal({
                   ) : (
                     <>
                       {senders.map(
-                        (sender) => (
+                        (
+                          sender,
+                        ) => (
                           <option
                             key={
                               sender.id
@@ -844,7 +914,9 @@ export default function ComposeEmailModal({
                               sender.id
                             }
                           >
-                            {sender.email}
+                            {
+                              sender.email
+                            }
                           </option>
                         ),
                       )}
@@ -853,11 +925,14 @@ export default function ComposeEmailModal({
                 </select>
 
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+
               </div>
             </div>
 
             {/* TO */}
+
             <div className="flex min-h-12 items-start py-2">
+
               <div className="w-18 shrink-0 pt-2 text-[13px] font-medium text-slate-700">
                 To
               </div>
@@ -867,7 +942,9 @@ export default function ComposeEmailModal({
                 {getRecipientList().map(
                   (email) => (
                     <span
-                      key={email}
+                      key={
+                        email
+                      }
                       className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-700"
                     >
                       {email}
@@ -891,9 +968,12 @@ export default function ComposeEmailModal({
                   value={
                     recipientInput
                   }
-                  onChange={(event) =>
+                  onChange={(
+                    event,
+                  ) =>
                     setRecipientInput(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
                   onKeyDown={
@@ -910,39 +990,68 @@ export default function ComposeEmailModal({
                   }}
                   placeholder={
                     getRecipientList()
-                      .length === 0
+                      .length ===
+                    0
                       ? "recipient@example.com"
                       : "Add recipient"
                   }
                   className="min-w-55 flex-1 border-0 bg-transparent px-1 py-2 text-[13px] text-slate-700 outline-none placeholder:text-slate-400"
                 />
+
+                {/* RECIPIENT CSV / TXT UPLOAD */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    leadFileInputRef.current?.click()
+                  }
+                  className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-medium text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600"
+                  title="Upload recipient CSV or TXT file"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Upload CSV/TXT
+                </button>
+
               </div>
             </div>
 
             {/* SUBJECT */}
+
             <div className="flex min-h-12 items-center">
+
               <div className="w-18 shrink-0 text-[13px] font-medium text-slate-700">
                 Subject
               </div>
 
               <input
-                value={subject}
-                onChange={(event) =>
+                value={
+                  subject
+                }
+                onChange={(
+                  event,
+                ) =>
                   setSubject(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 placeholder="Subject"
                 className="flex-1 border-0 bg-transparent px-0 py-2 text-[14px] text-slate-800 outline-none placeholder:text-slate-400"
               />
+
             </div>
+
           </div>
 
-          {/* ================= SETTINGS ================= */}
+          {/* =================================================
+              SETTINGS
+          ================================================= */}
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 py-3">
 
+            {/* DELAY */}
+
             <div className="flex items-center gap-2">
+
               <span className="text-[12px] font-medium text-slate-600">
                 Delay between 2 emails
               </span>
@@ -952,10 +1061,13 @@ export default function ComposeEmailModal({
                 min="0"
                 max="60000"
                 value={
-                  Number(delayMs) /
-                  1000
+                  Number(
+                    delayMs,
+                  ) / 1000
                 }
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setDelayMs(
                     String(
                       Math.max(
@@ -974,9 +1086,14 @@ export default function ComposeEmailModal({
               <span className="text-[11px] text-slate-400">
                 sec
               </span>
+
             </div>
 
+            {/* HOURLY LIMIT */}
+            {/* HOURLY LIMIT */}
+
             <div className="flex items-center gap-2">
+
               <span className="text-[12px] font-medium text-slate-600">
                 Hourly Limit
               </span>
@@ -985,53 +1102,81 @@ export default function ComposeEmailModal({
                 type="number"
                 min="1"
                 max="10000"
-                value={
-                  hourlyLimit
-                }
+                value={hourlyLimit}
                 onChange={(event) =>
                   setHourlyLimit(
                     event.target.value,
                   )
                 }
-                className="h-8 w-13.5 rounded-md border border-slate-200 bg-white px-2 text-center text-xs text-slate-600 outline-none focus:border-emerald-400"
+                className="h-8 w-20 rounded-md border border-slate-200 bg-white px-2 text-center text-xs text-slate-600 outline-none focus:border-emerald-400"
               />
+
             </div>
 
-            {/* Scheduled indicator */}
+
+            {/* SCHEDULED */}
+
             {startTime && (
               <button
                 type="button"
                 onClick={() =>
-                  setShowSchedule(true)
+                  setShowSchedule(
+                    true,
+                  )
                 }
                 className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-600"
               >
                 <Clock3 className="h-3.5 w-3.5" />
+
                 {formatScheduleLabel(
                   startTime,
                 )}
               </button>
             )}
+
           </div>
 
-          {/* ================= EDITOR ================= */}
+          {/* =================================================
+              COMPACT EMAIL EDITOR
+          ================================================= */}
 
-          <div className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/70">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
 
-            {/* Placeholder / editor */}
+            {/* EMAIL BODY */}
+
             <div
-              ref={editorRef}
+              ref={
+                editorRef
+              }
               contentEditable
               suppressContentEditableWarning
               onInput={
                 handleEditorInput
               }
               data-placeholder="Type Your Reply..."
-              className="min-h-85 px-4 py-4 text-[14px] leading-7 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-400 empty:before:content-[attr(data-placeholder)] lg:min-h-97.5"
+              className="
+                min-h-45
+                max-h-90
+                overflow-y-auto
+                px-4
+                py-4
+                text-[14px]
+                leading-6
+                text-slate-700
+                outline-none
+                empty:before:pointer-events-none
+                empty:before:text-slate-400
+                empty:before:content-[attr(data-placeholder)]
+              "
             />
 
-            {/* Toolbar */}
+            {/* =================================================
+                TOOLBAR
+            ================================================= */}
+
             <div className="flex flex-wrap items-center gap-0 border-t border-slate-200 bg-white px-3 py-2">
+
+              {/* UNDO */}
 
               <ToolbarButton
                 icon={
@@ -1039,9 +1184,13 @@ export default function ComposeEmailModal({
                 }
                 label="Undo"
                 onClick={() =>
-                  format("undo")
+                  format(
+                    "undo",
+                  )
                 }
               />
+
+              {/* REDO */}
 
               <ToolbarButton
                 icon={
@@ -1049,11 +1198,15 @@ export default function ComposeEmailModal({
                 }
                 label="Redo"
                 onClick={() =>
-                  format("redo")
+                  format(
+                    "redo",
+                  )
                 }
               />
 
               <ToolbarDivider />
+
+              {/* TEXT */}
 
               <ToolbarButton
                 icon={
@@ -1063,11 +1216,15 @@ export default function ComposeEmailModal({
                 }
                 label="Normal text"
                 onClick={() =>
-                  format("formatBlock")
+                  format(
+                    "formatBlock",
+                  )
                 }
               />
 
               <ToolbarDivider />
+
+              {/* BOLD */}
 
               <ToolbarButton
                 icon={
@@ -1075,9 +1232,13 @@ export default function ComposeEmailModal({
                 }
                 label="Bold"
                 onClick={() =>
-                  format("bold")
+                  format(
+                    "bold",
+                  )
                 }
               />
+
+              {/* ITALIC */}
 
               <ToolbarButton
                 icon={
@@ -1085,9 +1246,13 @@ export default function ComposeEmailModal({
                 }
                 label="Italic"
                 onClick={() =>
-                  format("italic")
+                  format(
+                    "italic",
+                  )
                 }
               />
+
+              {/* UNDERLINE */}
 
               <ToolbarButton
                 icon={
@@ -1095,11 +1260,15 @@ export default function ComposeEmailModal({
                 }
                 label="Underline"
                 onClick={() =>
-                  format("underline")
+                  format(
+                    "underline",
+                  )
                 }
               />
 
               <ToolbarDivider />
+
+              {/* ALIGN LEFT */}
 
               <ToolbarButton
                 icon={
@@ -1113,6 +1282,8 @@ export default function ComposeEmailModal({
                 }
               />
 
+              {/* ALIGN CENTER */}
+
               <ToolbarButton
                 icon={
                   <AlignCenter className="h-4 w-4" />
@@ -1124,6 +1295,8 @@ export default function ComposeEmailModal({
                   )
                 }
               />
+
+              {/* ALIGN RIGHT */}
 
               <ToolbarButton
                 icon={
@@ -1139,6 +1312,8 @@ export default function ComposeEmailModal({
 
               <ToolbarDivider />
 
+              {/* NUMBERED LIST */}
+
               <ToolbarButton
                 icon={
                   <ListOrdered className="h-4 w-4" />
@@ -1150,6 +1325,8 @@ export default function ComposeEmailModal({
                   )
                 }
               />
+
+              {/* BULLET LIST */}
 
               <ToolbarButton
                 icon={
@@ -1165,6 +1342,8 @@ export default function ComposeEmailModal({
 
               <ToolbarDivider />
 
+              {/* QUOTE */}
+
               <ToolbarButton
                 icon={
                   <Quote className="h-4 w-4" />
@@ -1177,6 +1356,8 @@ export default function ComposeEmailModal({
                 }
               />
 
+              {/* LINK */}
+
               <ToolbarButton
                 icon={
                   <Link2 className="h-4 w-4" />
@@ -1186,6 +1367,8 @@ export default function ComposeEmailModal({
                   insertLink
                 }
               />
+
+              {/* STRIKETHROUGH */}
 
               <ToolbarButton
                 icon={
@@ -1199,6 +1382,8 @@ export default function ComposeEmailModal({
                 }
               />
 
+              {/* IMAGE */}
+
               <ToolbarButton
                 icon={
                   <ImageIcon className="h-4 w-4" />
@@ -1211,6 +1396,8 @@ export default function ComposeEmailModal({
                 }
               />
 
+              {/* UPLOAD LEADS */}
+
               <ToolbarButton
                 icon={
                   <FileText className="h-4 w-4" />
@@ -1220,13 +1407,19 @@ export default function ComposeEmailModal({
                   leadFileInputRef.current?.click()
                 }
               />
+
             </div>
+
           </div>
 
-          {/* Uploaded recipient information */}
+          {/* =================================================
+              RECIPIENT INFORMATION
+          ================================================= */}
+
           {getRecipientList()
             .length > 0 && (
             <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-400">
+
               <span>
                 {
                   getRecipientList()
@@ -1234,13 +1427,16 @@ export default function ComposeEmailModal({
                 }{" "}
                 recipient
                 {getRecipientList()
-                  .length !== 1
+                  .length !==
+                1
                   ? "s"
                   : ""}{" "}
                 selected
               </span>
 
-              <span>•</span>
+              <span>
+                •
+              </span>
 
               <button
                 type="button"
@@ -1249,12 +1445,16 @@ export default function ComposeEmailModal({
                 }
                 className="text-emerald-600 hover:underline"
               >
-                Upload another list
+                Upload another CSV/TXT
               </button>
+
             </div>
           )}
+
         </div>
+
       </main>
+
     </div>
   );
 }
@@ -1279,31 +1479,46 @@ function SendLaterPanel({
   return (
     <div className="absolute right-0 top-11 z-120 w-60.5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
 
+      {/* TITLE */}
+
       <div className="px-3 pb-2 pt-4">
+
         <h3 className="text-[13px] font-semibold text-slate-800">
           Send Later
         </h3>
+
       </div>
 
-      {/* Date/time input */}
+      {/* DATE / TIME */}
+
       <div className="px-3 pb-2">
+
         <div className="relative">
+
           <input
             type="datetime-local"
-            value={startTime}
-            onChange={(event) =>
+            value={
+              startTime
+            }
+            onChange={(
+              event,
+            ) =>
               onSelect(
-                event.target.value,
+                event.target
+                  .value,
               )
             }
             className="h-9 w-full appearance-none border-b border-slate-200 bg-transparent pr-8 text-xs text-slate-500 outline-none"
           />
 
           <CalendarDays className="pointer-events-none absolute right-1 top-2 h-4 w-4 text-slate-400" />
+
         </div>
+
       </div>
 
-      {/* Quick options */}
+      {/* QUICK OPTIONS */}
+
       <div className="py-1">
 
         <ScheduleOption
@@ -1343,14 +1558,18 @@ function SendLaterPanel({
             )
           }
         />
+
       </div>
 
-      {/* Footer */}
+      {/* FOOTER */}
+
       <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-3 py-3">
 
         <button
           type="button"
-          onClick={onCancel}
+          onClick={
+            onCancel
+          }
           className="rounded-full px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
         >
           Cancel
@@ -1364,10 +1583,16 @@ function SendLaterPanel({
         >
           Done
         </button>
+
       </div>
+
     </div>
   );
 }
+
+/* =========================================================
+   SCHEDULE OPTION
+========================================================= */
 
 function ScheduleOption({
   label,
@@ -1388,7 +1613,7 @@ function ScheduleOption({
 }
 
 /* =========================================================
-   TOOLBAR
+   TOOLBAR BUTTON
 ========================================================= */
 
 function ToolbarButton({
@@ -1404,7 +1629,9 @@ function ToolbarButton({
     <button
       type="button"
       title={label}
-      onMouseDown={(event) =>
+      onMouseDown={(
+        event,
+      ) =>
         event.preventDefault()
       }
       onClick={onClick}
@@ -1414,6 +1641,10 @@ function ToolbarButton({
     </button>
   );
 }
+
+/* =========================================================
+   TOOLBAR DIVIDER
+========================================================= */
 
 function ToolbarDivider() {
   return (
