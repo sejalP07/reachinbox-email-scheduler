@@ -7,19 +7,15 @@ import "./queues/email.worker.js";
 
 const PORT = Number(process.env.PORT ?? 5000);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-});
-
 async function bootstrap(): Promise<void> {
   try {
     await connectDatabase();
 
     await verifySmtpConnection();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(
-        `🚀 Backend running on http://localhost:${PORT}`,
+        `🚀 Backend running on port ${PORT}`,
       );
     });
   } catch (error) {
