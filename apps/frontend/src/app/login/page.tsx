@@ -1,108 +1,44 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:5000";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
   const handleGoogleLogin = () => {
-    window.location.href =
-      `${API_URL}/api/auth/google`;
-  };
-
-  const handleEmailLogin = (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
-    event.preventDefault();
-
-    // Email/password authentication is not part
-    // of the current assignment implementation.
-    alert(
-      "Email/password login is not configured. Please use Login with Google.",
-    );
+    window.location.href = `${API_URL}/api/auth/google`;
   };
 
   return (
     <main className="min-h-screen bg-white">
       <div className="flex min-h-screen items-center justify-center px-6 py-12">
-        <div className="w-full max-w-[336px]">
-
-          {/* Login Card */}
+        <div className="w-full max-w-84">
           <div className="rounded-lg border border-slate-200 bg-white px-9 py-9 shadow-sm">
-
-            {/* Heading */}
             <div className="mb-7 text-center">
               <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-slate-900">
                 Login
               </h1>
+
+              <p className="mt-2 text-[12px] text-slate-500">
+                Sign in to ReachInbox Email Scheduler
+              </p>
             </div>
 
-            {/* Google Login */}
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#E2F5EC] px-4 text-[12px] font-medium text-slate-700 transition hover:bg-[#D7F0E4] focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              aria-label="Continue with Google"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             >
               <GoogleIcon />
 
-              <span>Login with Google</span>
+              <span>Continue with Google</span>
             </button>
 
-            {/* Divider */}
-            <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-slate-200" />
-
-              <span className="whitespace-nowrap text-[10px] text-slate-400">
-                or sign up through email
-              </span>
-
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            {/* Email / Password Form */}
-            <form onSubmit={handleEmailLogin}>
-
-              {/* Email */}
-              <div className="mb-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) =>
-                    setEmail(event.target.value)
-                  }
-                  placeholder="Email ID"
-                  autoComplete="email"
-                  className="h-10 w-full rounded-lg bg-[#F4F7F6] px-3 text-[12px] text-slate-700 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Password */}
-              <div className="mb-6">
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) =>
-                    setPassword(event.target.value)
-                  }
-                  placeholder="Password"
-                  autoComplete="current-password"
-                  className="h-10 w-full rounded-lg bg-[#F4F7F6] px-3 text-[12px] text-slate-700 outline-none transition placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Login */}
-              <button
-                type="submit"
-                className="h-10 w-full rounded-lg bg-[#00B341] text-[12px] font-medium text-white transition hover:bg-[#00A63D] focus:outline-none focus:ring-2 focus:ring-emerald-200"
-              >
-                Login
-              </button>
-            </form>
+            <p className="mt-5 text-center text-[11px] leading-5 text-slate-400">
+              You will be redirected to Google to securely
+              authenticate your account.
+            </p>
           </div>
         </div>
       </div>
@@ -113,8 +49,8 @@ export default function LoginPage() {
 function GoogleIcon() {
   return (
     <svg
-      width="14"
-      height="14"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
@@ -135,7 +71,7 @@ function GoogleIcon() {
 
       <path
         fill="#EA4335"
-        d="M12 6.11c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.2 14.63 2.25 12 2.25a9.74 9.74 0 0 0-8.7 5.39l3.24 2.5C7.31 7.83 9.46 6.11 12 6.11Z"
+        d="M12 6.11c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.2 14.63 2.25 12 2.25a9.74 9.74 0 0 0-8.7 5.39l3.24 2.5 3.24 2.5C7.31 7.83 9.46 6.11 12 6.11Z"
       />
     </svg>
   );
