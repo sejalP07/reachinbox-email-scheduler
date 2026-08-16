@@ -113,6 +113,26 @@ app.use(passport.session());
  */
 app.use(pinoHttp({}));
 
+
+
+app.get("/", (_req, res) => {
+  res.status(200).send(`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta
+          name="google-site-verification"
+          content="mA1LpHVwiH6Emi6qW8KIDSINQbLGjJpi-HvrBuAWQ2U"
+        />
+        <title>ReachInbox Email Scheduler</title>
+      </head>
+      <body>
+        <h1>ReachInbox Email Scheduler</h1>
+      </body>
+    </html>
+  `);
+});
+
 /**
  * Basic health check.
  */
