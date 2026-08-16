@@ -18,10 +18,9 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect:
-      "http://localhost:3000/login?error=google_auth_failed",
+    failureRedirect: "/login?error=google_auth_failed",
   }),
-  (_req, res) => {
+  (req, res) => {
     res.redirect("http://localhost:3000/dashboard");
   },
 );

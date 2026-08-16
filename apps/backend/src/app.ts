@@ -35,9 +35,7 @@ app.use(helmet());
 
 app.use(
   cors({
-    origin:
-      process.env.FRONTEND_URL ??
-      "http://localhost:3000",
+    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
     credentials: true,
   }),
 );
@@ -57,29 +55,16 @@ app.use(
  */
 app.use(
   session({
-    store: new PgSessionStore({
-      pool: sessionPool,
-      tableName: "session",
-      createTableIfMissing: false,
-    }),
-
-    secret:
-      process.env.SESSION_SECRET ??
-      "development-secret",
-
+    secret: process.env.SESSION_SECRET ?? "development-secret",
     resave: false,
-
     saveUninitialized: false,
-
     cookie: {
       httpOnly: true,
       secure: false,
       sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   }),
 );
-
 app.use(passport.initialize());
 
 app.use(passport.session());
