@@ -11,12 +11,7 @@ export async function getCurrentUser() {
 }
 
 export function loginWithGoogle() {
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:5000";
-
-  window.location.href =
-    `${apiUrl}/api/auth/google`;
+  window.location.href = "/api/auth/google";
 }
 
 export async function logout() {
