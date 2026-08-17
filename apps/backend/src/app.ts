@@ -18,6 +18,15 @@ const pinoHttp = pinoHttpModule.default ?? pinoHttpModule;
 const app = express();
 
 /**
+ * IMPORTANT FOR PRODUCTION
+ *
+ * Render/Cloudflare sits in front of the Express application.
+ * Trusting the proxy allows Express to correctly detect the
+ * original HTTPS connection and set secure session cookies.
+ */
+app.set("trust proxy", 1);
+
+/**
  * PostgreSQL connection pool used by express-session.
  *
  * Sessions are persisted in PostgreSQL instead of
@@ -43,6 +52,12 @@ app.use(helmet());
 
 /**
  * CORS.
+ *
+ * Production:
+ * FRONTEND_URL=https://reachinbox-email-scheduler-zeta.vercel.app
+ *
+ * credentials: true is required so the browser can send
+ * the express-session cookie between Vercel and Render.
  */
 app.use(
   cors({
@@ -56,7 +71,11 @@ app.use(
 /**
  * Request body parsing.
  */
-app.use(express.json({ limit: "2mb" }));
+app.use(
+  express.json({
+    limit: "2mb",
+  }),
+);
 
 app.use(
   express.urlencoded({
@@ -67,7 +86,17 @@ app.use(
 /**
  * Persistent PostgreSQL-backed sessions.
  *
- * This replaces Express's default MemoryStore.
+ * Production cookie:
+ *   secure: true
+ *   sameSite: "none"
+ *
+ * This is required because:
+ *
+ * Vercel frontend
+ *      ↓
+ * Render backend
+ *
+ * are different origins.
  */
 app.use(
   session({
@@ -77,6 +106,10 @@ app.use(
       createTableIfMissing: true,
     }),
 
+    /**
+     * IMPORTANT:
+     * Set SESSION_SECRET in Render Environment Variables.
+     */
     secret:
       process.env.SESSION_SECRET ??
       "development-secret-change-later",
@@ -86,16 +119,29 @@ app.use(
     saveUninitialized: false,
 
     cookie: {
+      /**
+       * JavaScript cannot access the session cookie.
+       */
       httpOnly: true,
 
+      /**
+       * HTTPS is required in production.
+       */
       secure:
         process.env.NODE_ENV === "production",
 
+      /**
+       * Required for cross-origin authentication
+       * between Vercel and Render.
+       */
       sameSite:
         process.env.NODE_ENV === "production"
           ? "none"
           : "lax",
 
+      /**
+       * Session lifetime: 7 days.
+       */
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   }),
@@ -113,8 +159,9 @@ app.use(passport.session());
  */
 app.use(pinoHttp({}));
 
-
-
+/**
+ * Root endpoint.
+ */
 app.get("/", (_req, res) => {
   res.status(200).send(`
     <!DOCTYPE html>
@@ -126,6 +173,7 @@ app.get("/", (_req, res) => {
         />
         <title>ReachInbox Email Scheduler</title>
       </head>
+
       <body>
         <h1>ReachInbox Email Scheduler</h1>
       </body>
