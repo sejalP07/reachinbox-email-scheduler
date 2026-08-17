@@ -1,1379 +1,281 @@
-# ReachInbox Scheduler
+# ReachInbox Email Scheduler
 
-A production-style email scheduling application that allows users to connect their Google account, create scheduled emails, manage scheduled messages, and automatically send them at the configured time.
-
-The project is designed with a scalable backend architecture using **FastAPI, PostgreSQL, Redis, and background workers**, with a modern frontend built using **Next.js, TypeScript, and Tailwind CSS**.
+A production-style email scheduling service and dashboard, built for the ReachInbox hiring assignment. Users log in with Google, compose a message to a list of recipients, and the backend schedules and sends each email at the configured time — reliably, without cron, and without losing or duplicating work if the server restarts.
 
 ---
 
 ## 🚀 Features
 
-* 🔐 Google OAuth 2.0 authentication
-* 📧 Gmail account integration
-* ✉️ Compose and schedule emails
-* ⏰ Schedule emails for a specific date and time
-* 📋 View scheduled emails
-* 🗑️ Cancel scheduled emails
-* 📤 Track email delivery status
-* 🔄 Background email processing
-* ⚡ Redis-based job queue
-* 🗄️ PostgreSQL database
-* 🔒 Secure token management
-* 🐳 Docker support
-* 🌐 REST API architecture
-* 📊 Email status tracking
-* ♻️ Retry handling for failed email jobs
-* 🧩 Modular backend architecture
+* 🔐 Real Google OAuth 2.0 login (Passport, session-based)
+* ✉️ Compose emails with subject, rich-text body, and a recipient list
+* 📎 CSV/TXT lead upload with automatic email-address parsing
+* ⏰ Schedule a start time, per-email delay, and hourly send limit per campaign
+* 📋 Scheduled Emails and Sent Emails dashboard views
+* 📊 Live stats (scheduled / sent / failed) with auto-refresh
+* ⚡ BullMQ + Redis delayed jobs — **no cron, anywhere**
+* 🔒 Redis-backed, multi-worker-safe rate limiting (per-sender, per-hour)
+* ♻️ Automatic requeue into the next hour window when the rate limit is hit
+* 🔁 Idempotent sending — a job can never send the same email twice
+* 🗄️ PostgreSQL + Prisma for persistent storage
+* 📤 Ethereal Email (fake SMTP) for safe test sending, with preview links
+* 🐳 Docker Compose for Postgres + Redis
 
 ---
 
-# 🏗️ Architecture
+## 🏗️ Architecture
 
 ```text
-                         ┌─────────────────────┐
-                         │      Next.js        │
-                         │      Frontend       │
-                         └──────────┬──────────┘
-                                    │
-                                    │ REST API
-                                    ▼
-                         ┌─────────────────────┐
-                         │      FastAPI        │
-                         │       Backend       │
-                         └───────┬─────┬───────┘
-                                 │     │
-                    ┌────────────┘     └──────────────┐
-                    ▼                                 ▼
-          ┌──────────────────┐              ┌──────────────────┐
-          │   PostgreSQL     │              │      Redis       │
-          │    Database      │              │    Job Queue     │
-          └──────────────────┘              └────────┬─────────┘
-                                                      │
-                                                      ▼
-                                             ┌─────────────────┐
-                                             │  Worker /       │
-                                             │  Scheduler      │
-                                             └────────┬────────┘
-                                                      │
-                                                      ▼
-                                             ┌─────────────────┐
-                                             │   Gmail API     │
-                                             └─────────────────┘
+                    ┌─────────────────────┐
+                    │   Next.js Frontend    │
+                    └──────────┬───────────┘
+                               │ REST API (session cookie)
+                               ▼
+                    ┌─────────────────────┐
+                    │   Express Backend     │
+                    │  (Passport, Prisma)   │
+                    └───────┬─────┬────────┘
+                            │     │
+               ┌────────────┘     └──────────────┐
+               ▼                                  ▼
+     ┌──────────────────┐               ┌──────────────────┐
+     │    PostgreSQL      │               │      Redis         │
+     │ users / senders /   │               │  BullMQ queue +     │
+     │ campaigns / emails  │               │  rate-limit counters │
+     └──────────────────┘               └────────┬─────────┘
+                                                    │
+                                                    ▼
+                                          ┌──────────────────┐
+                                          │   BullMQ Worker    │
+                                          │ (concurrency, rate  │
+                                          │  limit, idempotency)│
+                                          └────────┬─────────┘
+                                                    │
+                                                    ▼
+                                          ┌──────────────────┐
+                                          │  Ethereal SMTP     │
+                                          │ (nodemailer)        │
+                                          └──────────────────┘
 ```
 
 ---
 
-# 📁 Project Structure
+## 📁 Project Structure
 
 ```text
-reachinbox-scheduler/
+reachinbox-email-scheduler/
 │
 ├── apps/
-│   │
 │   ├── backend/
-│   │   ├── app/
-│   │   │   ├── api/
-│   │   │   │   ├── routes/
-│   │   │   │   │   ├── auth.py
-│   │   │   │   │   ├── emails.py
-│   │   │   │   │   └── health.py
-│   │   │   │   │
-│   │   │   │   └── dependencies.py
-│   │   │   │
-│   │   │   ├── core/
-│   │   │   │   ├── config.py
-│   │   │   │   ├── security.py
-│   │   │   │   └── database.py
-│   │   │   │
-│   │   │   ├── models/
-│   │   │   │   ├── user.py
-│   │   │   │   └── email.py
-│   │   │   │
-│   │   │   ├── schemas/
-│   │   │   │   ├── auth.py
-│   │   │   │   └── email.py
-│   │   │   │
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   ├── migrations/
+│   │   │   └── seed.ts
+│   │   ├── src/
+│   │   │   ├── config/
+│   │   │   │   ├── database.ts       # Prisma client
+│   │   │   │   ├── redis.ts          # ioredis connection
+│   │   │   │   └── passport.ts       # Google OAuth strategy
+│   │   │   ├── controllers/
+│   │   │   │   ├── auth.controller.ts
+│   │   │   │   └── email.controller.ts
+│   │   │   ├── middleware/
+│   │   │   │   └── require-auth.ts
+│   │   │   ├── queues/
+│   │   │   │   ├── email.queue.ts    # BullMQ Queue definition
+│   │   │   │   └── email.worker.ts   # BullMQ Worker (concurrency, locking)
 │   │   │   ├── services/
-│   │   │   │   ├── google_oauth.py
-│   │   │   │   ├── gmail.py
-│   │   │   │   └── scheduler.py
-│   │   │   │
-│   │   │   ├── workers/
-│   │   │   │   └── email_worker.py
-│   │   │   │
-│   │   │   └── main.py
-│   │   │
-│   │   ├── tests/
-│   │   ├── requirements.txt
-│   │   ├── Dockerfile
-│   │   └── .env.example
+│   │   │   │   ├── email-scheduler.service.ts  # creates campaign + delayed jobs
+│   │   │   │   ├── email-rate-limiter.service.ts # atomic Redis rate limiter
+│   │   │   │   └── email-smtp.service.ts       # Ethereal/nodemailer transport
+│   │   │   ├── routes/
+│   │   │   ├── types/
+│   │   │   ├── utils/
+│   │   │   ├── app.ts
+│   │   │   └── server.ts
+│   │   ├── .env.example
+│   │   └── package.json
 │   │
 │   └── frontend/
-│       ├── app/
-│       │   ├── login/
-│       │   ├── dashboard/
-│       │   ├── compose/
-│       │   └── page.tsx
-│       │
-│       ├── components/
-│       │   ├── Navbar.tsx
-│       │   ├── EmailForm.tsx
-│       │   ├── ScheduledEmailCard.tsx
-│       │   └── StatusBadge.tsx
-│       │
-│       ├── lib/
-│       │   └── api.ts
-│       │
-│       ├── public/
-│       ├── package.json
-│       ├── next.config.ts
-│       ├── tailwind.config.ts
-│       └── Dockerfile
+│       ├── src/
+│       │   ├── app/
+│       │   │   ├── login/
+│       │   │   └── dashboard/
+│       │   ├── components/
+│       │   │   ├── layout/           # Header, Sidebar
+│       │   │   ├── email/            # ComposeEmailModal (CSV upload, editor)
+│       │   │   ├── dashboard/        # EmailTable, ScheduledEmails, SentEmails, DashboardStats
+│       │   │   └── ui/               # Button, Input, Modal, Badge, EmptyState
+│       │   ├── lib/                  # api.ts, auth.ts, emails.ts, csv.ts
+│       │   └── types/
+│       └── package.json
 │
 ├── docker-compose.yml
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-# 🛠️ Tech Stack
+## 🛠️ Tech Stack
 
-## Frontend
+**Backend:** TypeScript, Express, BullMQ, ioredis, Prisma, PostgreSQL, Passport (Google OAuth 2.0), nodemailer (Ethereal SMTP), Zod, Pino
 
-* Next.js
-* React
-* TypeScript
-* Tailwind CSS
+**Frontend:** Next.js, React, TypeScript, Tailwind CSS
 
-## Backend
-
-* Python
-* FastAPI
-* Pydantic
-* SQLAlchemy
-
-## Database
-
-* PostgreSQL
-
-## Queue / Scheduling
-
-* Redis
-* Background Worker
-* Scheduled Job Processing
-
-## Authentication
-
-* Google OAuth 2.0
-
-## Email Provider
-
-* Gmail API
-
-## Infrastructure
-
-* Docker
-* Docker Compose
+**Infra:** Docker Compose (PostgreSQL + Redis)
 
 ---
 
-# 📋 Prerequisites
+## 📋 Prerequisites
 
-Install the following before running the project:
-
-* Git
-* Python 3.10+
 * Node.js 20+
-* npm
-* Docker Desktop
-* PostgreSQL
-* Redis
-
-If using Docker, PostgreSQL and Redis can be started automatically using Docker Compose.
+* Docker Desktop (for Postgres + Redis) — or local installs of both
+* A Google Cloud OAuth 2.0 Client ID/Secret
+* An Ethereal Email account (free, generated instantly at [ethereal.email](https://ethereal.email))
 
 ---
 
-# 📥 Installation
-
-## 1. Clone the repository
+## 📥 Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/reachinbox-scheduler.git
-
-cd reachinbox-scheduler
+git clone https://github.com/sejalP07/reachinbox-email-scheduler.git
+cd reachinbox-email-scheduler
 ```
 
----
-
-# 🔧 Backend Setup
-
-Move into the backend directory:
-
-```bash
-cd apps/backend
-```
-
-Create a virtual environment:
-
-### Windows
-
-```powershell
-python -m venv .venv
-```
-
-Activate it:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-### macOS / Linux
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# 🔐 Environment Variables
-
-Create:
-
-```text
-apps/backend/.env
-```
-
-Use `.env.example` as a reference.
-
-Example:
-
-```env
-APP_NAME=ReachInbox Scheduler
-ENVIRONMENT=development
-
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/reachinbox
-
-REDIS_URL=redis://localhost:6379/0
-
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
-
-SECRET_KEY=your_secret_key
-
-FRONTEND_URL=http://localhost:3000
-```
-
-### Important
-
-Never commit `.env` to Git.
-
-Your `.gitignore` should contain:
-
-```gitignore
-.env
-.env.*
-!.env.example
-```
-
----
-
-# 🔑 Google OAuth Setup
-
-The application uses Google OAuth 2.0 to authenticate users and access Gmail.
-
-## Step 1 — Create a Google Cloud Project
-
-Open Google Cloud Console and create a new project.
-
-Suggested project name:
-
-```text
-ReachInbox Scheduler
-```
-
----
-
-## Step 2 — Enable Gmail API
-
-Navigate to:
-
-```text
-APIs & Services
-→ Library
-→ Gmail API
-→ Enable
-```
-
----
-
-## Step 3 — Configure OAuth Consent Screen
-
-Configure the OAuth consent screen with:
-
-```text
-App name:
-ReachInbox Scheduler
-```
-
-Add your support email and developer contact information.
-
----
-
-## Step 4 — Create OAuth Credentials
-
-Go to:
-
-```text
-APIs & Services
-→ Credentials
-→ Create Credentials
-→ OAuth Client ID
-```
-
-Application type:
-
-```text
-Web application
-```
-
-Add the authorized redirect URI:
-
-```text
-http://localhost:8000/api/auth/google/callback
-```
-
-Copy:
-
-```text
-Client ID
-Client Secret
-```
-
-into your backend `.env` file.
-
----
-
-# 📧 Gmail OAuth Scopes
-
-The application may request Gmail permissions such as:
-
-```text
-openid
-email
-profile
-https://www.googleapis.com/auth/gmail.send
-```
-
-Only request the minimum permissions required by the application.
-
----
-
-# 🗄️ Database Setup
-
-Create the PostgreSQL database:
-
-```sql
-CREATE DATABASE reachinbox;
-```
-
-Example connection:
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/reachinbox
-```
-
----
-
-# 🔴 Redis Setup
-
-Redis is used for scheduling and background job processing.
-
-If Redis is installed locally:
-
-```bash
-redis-server
-```
-
-Default connection:
-
-```env
-REDIS_URL=redis://localhost:6379/0
-```
-
----
-
-# 🐳 Docker Setup
-
-The easiest way to run PostgreSQL and Redis is Docker Compose.
-
-From the project root:
+### 1. Start infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-Check running containers:
+This starts PostgreSQL on `localhost:5434` and Redis on `localhost:6379`.
+
+### 2. Backend
 
 ```bash
-docker compose ps
-```
-
-Stop the services:
-
-```bash
-docker compose down
-```
-
----
-
-# ▶️ Running the Backend
-
-From:
-
-```text
-apps/backend
-```
-
-Run:
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-The backend will be available at:
-
-```text
-http://localhost:8000
-```
-
-Swagger documentation:
-
-```text
-http://localhost:8000/docs
-```
-
-ReDoc:
-
-```text
-http://localhost:8000/redoc
-```
-
----
-
-# ▶️ Running the Frontend
-
-Open another terminal:
-
-```bash
-cd apps/frontend
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Create:
-
-```text
-.env.local
-```
-
-Example:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-Frontend:
-
-```text
-http://localhost:3000
-```
-
----
-
-# ⚙️ Running the Worker
-
-The email worker processes scheduled jobs.
-
-Example:
-
-```bash
-python -m app.workers.email_worker
-```
-
-The worker:
-
-1. Reads scheduled jobs.
-2. Checks whether the email is ready to send.
-3. Retrieves the user's Gmail credentials.
-4. Calls Gmail API.
-5. Sends the email.
-6. Updates the email status.
-7. Retries failed jobs when appropriate.
-
----
-
-# 📡 API Endpoints
-
-## Health
-
-### Check API health
-
-```http
-GET /health
-```
-
-Example response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
-# 🔐 Authentication
-
-## Start Google OAuth
-
-```http
-GET /api/auth/google/login
-```
-
-Redirects the user to Google's OAuth consent page.
-
----
-
-## OAuth Callback
-
-```http
-GET /api/auth/google/callback
-```
-
-Google redirects the user back to this endpoint after authentication.
-
----
-
-## Current User
-
-```http
-GET /api/auth/me
-```
-
-Example response:
-
-```json
-{
-  "id": "user-id",
-  "email": "user@example.com",
-  "name": "User"
-}
-```
-
----
-
-# ✉️ Email APIs
-
-## Create Scheduled Email
-
-```http
-POST /api/emails
-```
-
-Example request:
-
-```json
-{
-  "to": "recipient@example.com",
-  "subject": "Hello",
-  "body": "This is a scheduled email.",
-  "scheduled_at": "2026-08-20T10:30:00+05:30"
-}
-```
-
----
-
-## Get Scheduled Emails
-
-```http
-GET /api/emails
-```
-
----
-
-## Get Email by ID
-
-```http
-GET /api/emails/{email_id}
-```
-
----
-
-## Cancel Scheduled Email
-
-```http
-DELETE /api/emails/{email_id}
-```
-
----
-
-# 📊 Email Status
-
-An email can have the following statuses:
-
-```text
-scheduled
-processing
-sent
-failed
-cancelled
-```
-
-Example:
-
-```text
-scheduled
-    ↓
-processing
-    ↓
-sent
-```
-
-If delivery fails:
-
-```text
-processing
-    ↓
-failed
-    ↓
-retry
-    ↓
-processing
-```
-
----
-
-# ⏰ Scheduling Flow
-
-When a user schedules an email:
-
-```text
-User
- │
- ▼
-Next.js
- │
- ▼
-FastAPI
- │
- ▼
-Validate Request
- │
- ▼
-PostgreSQL
- │
- ▼
-Create Scheduled Email
- │
- ▼
-Redis Queue
- │
- ▼
-Worker
- │
- ├── Not ready → wait
- │
- └── Ready
-       │
-       ▼
-    Gmail API
-       │
-       ▼
-    Send Email
-       │
-       ▼
-Update PostgreSQL
-       │
-       ▼
-      SENT
-```
-
----
-
-# 🔒 Security
-
-The application follows several security practices:
-
-* OAuth 2.0 authentication
-* HTTPS recommended for production
-* Environment variables for secrets
-* No secrets committed to Git
-* Token encryption recommended
-* Input validation using Pydantic
-* Authentication middleware
-* User-level data isolation
-* Database constraints
-* API error handling
-* Rate-limit protection recommended
-* Minimal OAuth scopes
-
----
-
-# 🔄 Retry Strategy
-
-Temporary Gmail/API failures should not immediately mark an email permanently failed.
-
-A retry strategy can use exponential backoff:
-
-```text
-Attempt 1 → immediate
-Attempt 2 → 5 seconds
-Attempt 3 → 30 seconds
-Attempt 4 → 2 minutes
-Attempt 5 → 10 minutes
-```
-
-After the maximum retry count, the email is marked:
-
-```text
-failed
-```
-
----
-
-# 🧪 Testing
-
-Run backend tests:
-
-```bash
-pytest
-```
-
-Run with verbose output:
-
-```bash
-pytest -v
-```
-
-Frontend tests can be added using the project's configured testing framework.
-
----
-
-# 🧹 Code Quality
-
-Recommended backend commands:
-
-```bash
-ruff check .
-```
-
-Format code:
-
-```bash
-ruff format .
-```
-
-Type checking:
-
-```bash
-mypy .
-```
-
-Frontend:
-
-```bash
-npm run lint
-```
-
----
-
-# 🐳 Full Docker Development
-
-Start all services:
-
-```bash
-docker compose up --build
-```
-
-Run in detached mode:
-
-```bash
-docker compose up -d --build
-```
-
-View logs:
-
-```bash
-docker compose logs -f
-```
-
-Backend logs:
-
-```bash
-docker compose logs -f backend
-```
-
-Worker logs:
-
-```bash
-docker compose logs -f worker
-```
-
-Stop everything:
-
-```bash
-docker compose down
-```
-
-Remove volumes:
-
-```bash
-docker compose down -v
-```
-
----
-
-# 🌐 Production Deployment
-
-For production, the recommended architecture is:
-
-```text
-                    Internet
-                       │
-                       ▼
-                  Load Balancer
-                       │
-          ┌────────────┴────────────┐
-          ▼                         ▼
-      Frontend                   Backend
-      Next.js                    FastAPI
-                                    │
-                  ┌─────────────────┼─────────────────┐
-                  ▼                 ▼                 ▼
-             PostgreSQL          Redis            Worker
-                  │                                   │
-                  └───────────────────────────────────┘
-                                      │
-                                      ▼
-                                  Gmail API
-```
-
-Recommended production components:
-
-* Next.js deployment
-* FastAPI application server
-* Managed PostgreSQL
-* Managed Redis
-* Background worker
-* HTTPS
-* Secure secret management
-* Logging
-* Monitoring
-* Error tracking
-
----
-
-# 📈 Scalability
-
-The architecture is designed to support horizontal scaling.
-
-Multiple backend instances can run behind a load balancer:
-
-```text
-                  Load Balancer
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-    Backend 1      Backend 2      Backend 3
-        │              │              │
-        └──────────────┼──────────────┘
-                       ▼
-                    Redis
-                       │
-              ┌────────┼────────┐
-              ▼        ▼        ▼
-           Worker 1 Worker 2 Worker 3
-```
-
-This allows the application to process a larger number of scheduled emails.
-
----
-
-# 🧠 Design Decisions
-
-## Why FastAPI?
-
-FastAPI provides:
-
-* High performance
-* Async support
-* Automatic OpenAPI documentation
-* Pydantic validation
-* Clean REST API development
-* Easy integration with Python services
-
----
-
-## Why PostgreSQL?
-
-PostgreSQL is used for persistent application data such as:
-
-* Users
-* OAuth information
-* Scheduled emails
-* Email status
-* Timestamps
-* Retry information
-
----
-
-## Why Redis?
-
-Redis provides fast access to:
-
-* Queues
-* Job state
-* Scheduling information
-* Distributed locks
-* Temporary data
-
----
-
-## Why Background Workers?
-
-Sending email directly inside an HTTP request can make requests slow and unreliable.
-
-Instead:
-
-```text
-API Request
-    ↓
-Create Job
-    ↓
-Return Response
-    ↓
-Worker Processes Job
-```
-
-This improves reliability and scalability.
-
----
-
-# 🗃️ Core Database Entities
-
-## User
-
-```text
-User
-├── id
-├── email
-├── name
-├── google_id
-├── access_token
-├── refresh_token
-├── token_expiry
-├── created_at
-└── updated_at
-```
-
----
-
-## Scheduled Email
-
-```text
-ScheduledEmail
-├── id
-├── user_id
-├── recipient
-├── subject
-├── body
-├── scheduled_at
-├── status
-├── retry_count
-├── sent_at
-├── error_message
-├── created_at
-└── updated_at
-```
-
----
-
-# 🛡️ Error Handling
-
-The API should return consistent error responses.
-
-Example:
-
-```json
-{
-  "success": false,
-  "message": "Email could not be scheduled",
-  "error": "Invalid scheduled time"
-}
-```
-
-Common HTTP status codes:
-
-```text
-200 OK
-201 Created
-400 Bad Request
-401 Unauthorized
-403 Forbidden
-404 Not Found
-409 Conflict
-422 Validation Error
-429 Too Many Requests
-500 Internal Server Error
-```
-
----
-
-# 🐛 Troubleshooting
-
-## Backend does not start
-
-Check:
-
-```bash
-python --version
-```
-
-Then:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## PostgreSQL connection error
-
-Verify PostgreSQL is running:
-
-```bash
-docker compose ps
-```
-
-Check:
-
-```env
-DATABASE_URL
-```
-
-Make sure the database exists.
-
----
-
-## Redis connection error
-
-Check Redis:
-
-```bash
-docker compose ps
-```
-
-Expected Redis URL:
-
-```env
-REDIS_URL=redis://localhost:6379/0
-```
-
----
-
-## Google OAuth redirect error
-
-Make sure the redirect URI configured in Google Cloud exactly matches:
-
-```text
-http://localhost:8000/api/auth/google/callback
-```
-
-The following are considered different:
-
-```text
-http://localhost:8000/api/auth/google/callback
-http://localhost:8000/api/auth/google/callback/
-```
-
----
-
-## Gmail API permission error
-
-Verify that:
-
-* Gmail API is enabled.
-* OAuth credentials are correct.
-* Required scopes are configured.
-* The Google account has granted permission.
-* OAuth consent screen is configured correctly.
-
----
-
-## Email is not being sent
-
-Check:
-
-```text
-1. Backend is running
-2. Redis is running
-3. Worker is running
-4. Gmail OAuth is valid
-5. Scheduled time is correct
-6. Email status
-7. Worker logs
-```
-
----
-
-# 🔐 Environment Variables Reference
-
-| Variable               | Description                  |
-| ---------------------- | ---------------------------- |
-| `APP_NAME`             | Application name             |
-| `ENVIRONMENT`          | development / production     |
-| `DATABASE_URL`         | PostgreSQL connection string |
-| `REDIS_URL`            | Redis connection string      |
-| `GOOGLE_CLIENT_ID`     | Google OAuth client ID       |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret   |
-| `GOOGLE_REDIRECT_URI`  | OAuth callback URL           |
-| `SECRET_KEY`           | Application secret           |
-| `FRONTEND_URL`         | Frontend application URL     |
-
----
-
-# 🚦 Development Workflow
-
-Recommended workflow:
-
-```text
-1. Start PostgreSQL
-2. Start Redis
-3. Start FastAPI
-4. Start Worker
-5. Start Next.js
-6. Open application
-7. Login with Google
-8. Compose email
-9. Select scheduled time
-10. Create schedule
-11. Worker processes email
-12. Gmail sends email
-13. Status updated
-```
-
----
-
-# 📌 Git Workflow
-
-Create a feature branch:
-
-```bash
-git checkout -b feature/email-scheduling
-```
-
-Commit changes:
-
-```bash
-git add .
-git commit -m "Add email scheduling"
-```
-
-Push:
-
-```bash
-git push origin feature/email-scheduling
-```
-
----
-
-# 📝 Example Commit Messages
-
-```text
-feat: add Google OAuth authentication
-feat: add scheduled email API
-feat: add Gmail integration
-feat: add Redis job queue
-feat: add email worker
-feat: add scheduled email dashboard
-fix: handle Gmail token refresh
-fix: handle failed email jobs
-refactor: improve scheduler architecture
-test: add email scheduling tests
-docs: update README
-```
-
----
-
-# 📊 Future Improvements
-
-Possible future enhancements:
-
-* Multiple Gmail accounts
-* Email templates
-* Recurring emails
-* Bulk email scheduling
-* Email attachments
-* Timezone-aware scheduling
-* Email analytics
-* Delivery tracking
-* Open tracking
-* Click tracking
-* Advanced retry policies
-* Dead-letter queue
-* Distributed scheduler
-* Rate limiting
-* Admin dashboard
-* Audit logs
-* Prometheus metrics
-* Grafana monitoring
-* Sentry error tracking
-* Kubernetes deployment
-
----
-
-# 🎯 Project Goals
-
-The primary goals of ReachInbox Scheduler are:
-
-1. Build a reliable email scheduling system.
-2. Integrate Google OAuth securely.
-3. Integrate Gmail API.
-4. Process scheduled jobs asynchronously.
-5. Build a scalable backend architecture.
-6. Provide a clean user experience.
-7. Demonstrate production-style software engineering practices.
-
----
-
-# 👩‍💻 Author
-
-**Sejal P**
-
-MCA — RV Institute of Technology and Management, Bangalore
-
-Software Engineering | Backend Development | AI/ML
-
----
-
-# 📄 License
-
-This project is intended for educational and development purposes.
-
-Add an appropriate open-source license before publicly distributing the project.
-
----
-
-# ⭐ Acknowledgements
-
-Built using:
-
-* FastAPI
-* Next.js
-* PostgreSQL
-* Redis
-* Google OAuth
-* Gmail API
-* Docker
-
----
-
-## 🚀 Quick Start
-
-For experienced developers, the complete setup is:
-
-```bash
-# Clone
-git clone https://github.com/YOUR_USERNAME/reachinbox-scheduler.git
-
-cd reachinbox-scheduler
-
-# Start infrastructure
-docker compose up -d
-
-# Backend
 cd apps/backend
-
-python -m venv .venv
-
-# Windows
-.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-
-uvicorn app.main:app --reload --port 8000
-```
-
-In another terminal:
-
-```bash
-cd apps/frontend
-
 npm install
+cp .env.example .env
+# fill in GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ETHEREAL_USER, ETHEREAL_PASSWORD (see below)
 
+npx prisma migrate dev
 npm run dev
 ```
 
-Then open:
+Backend runs at `http://localhost:5000`.
 
-```text
-http://localhost:3000
+### 3. Frontend
+
+```bash
+cd apps/frontend
+npm install
+npm run dev
 ```
 
-Backend API:
-
-```text
-http://localhost:8000
-```
-
-Swagger:
-
-```text
-http://localhost:8000/docs
-```
+Frontend runs at `http://localhost:3000`.
 
 ---
 
-## ⚠️ Important
+## 🔐 Environment Variables (`apps/backend/.env`)
 
-Before pushing this repository to GitHub, verify that the following are **not committed**:
+| Variable                         | Description                                              |
+| --------------------------------- | ---------------------------------------------------------- |
+| `NODE_ENV`                        | `development` / `production`                               |
+| `PORT`                            | Backend port (default `5000`)                              |
+| `DATABASE_URL`                    | PostgreSQL connection string                                |
+| `REDIS_HOST` / `REDIS_PORT`       | Redis connection                                            |
+| `WORKER_CONCURRENCY`              | BullMQ worker concurrency (configurable, no hardcoding)     |
+| `MIN_EMAIL_DELAY_MS`              | Minimum delay between individual sends, in ms               |
+| `MAX_EMAILS_PER_HOUR_PER_SENDER`  | Hourly send cap, enforced per sender                        |
+| `FRONTEND_URL`                    | Used for OAuth redirects and CORS                            |
+| `SESSION_SECRET`                  | Express session signing secret                               |
+| `GOOGLE_CLIENT_ID` / `_SECRET`    | From Google Cloud Console                                    |
+| `GOOGLE_CALLBACK_URL`             | Must match the redirect URI registered in Google Cloud       |
+| `ETHEREAL_HOST` / `_PORT`         | Ethereal SMTP host (`smtp.ethereal.email`) / port (`587`)     |
+| `ETHEREAL_USER` / `_PASSWORD`     | Credentials from an Ethereal test account                    |
 
-```text
-.env
-.env.local
-credentials.json
-Google OAuth client secrets
-Access tokens
-Refresh tokens
-Database passwords
-API keys
-Secret keys
-```
+**Never commit `.env`.** Only `.env.example` should be tracked.
 
-Use:
+### Setting up Ethereal Email
 
-```text
-.env.example
-```
+Ethereal accounts are free and disposable — generate one at [https://ethereal.email](https://ethereal.email) ("Create Ethereal Account"), or programmatically via `nodemailer.createTestAccount()`. Copy the generated `user` and `pass` into `ETHEREAL_USER` / `ETHEREAL_PASSWORD`. Every send returns a preview URL (visible in the worker logs and stored on the email record) where you can view the rendered email in a browser — nothing is actually delivered.
 
-to document required environment variables without exposing actual secrets.
+### Setting up Google OAuth
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com).
+2. Under **APIs & Services → Credentials**, create an **OAuth Client ID** of type **Web application**.
+3. Add authorized redirect URI: `http://localhost:5000/api/auth/google/callback`.
+4. Copy the Client ID and Secret into `.env`.
+
+---
+
+## 🧠 Architecture Overview
+
+### How scheduling works
+
+Scheduling emails is entirely BullMQ-driven — **no cron jobs are used anywhere** in this project. When a campaign is submitted:
+
+1. `email-scheduler.service.ts` creates a `Campaign` row and one `ScheduledEmail` row per unique recipient in PostgreSQL.
+2. For each recipient, a BullMQ job is added to the `email-scheduler` queue with a computed `delay` (time until `scheduledAt`), using BullMQ's native delayed-job mechanism (backed by a Redis sorted set) rather than any polling or cron trigger.
+3. When a job's delay elapses, BullMQ hands it to an available worker.
+
+### How persistence on restart is handled
+
+BullMQ jobs live in Redis, not in process memory, so scheduled (delayed) jobs survive a backend restart on their own. On top of that, every job is tied to a `ScheduledEmail` row in PostgreSQL with a `status` field (`SCHEDULED → PROCESSING → SENT/FAILED`), so:
+
+* If the backend restarts before a job's delay elapses, the job is still sitting in Redis and fires at the correct time — nothing needs to be recreated.
+* If the backend restarts *while* a job is mid-processing, the worker re-checks the email's DB status before doing any send. An email already marked `SENT` is skipped rather than resent.
+
+### How idempotency is enforced
+
+Before sending, the worker attempts an atomic `UPDATE ... WHERE id = ? AND status = 'SCHEDULED'` to flip the row to `PROCESSING`. Only the worker that wins this conditional update proceeds to send; any other worker (or retry) sees `count === 0`, checks whether the email is already `SENT` or `PROCESSING`, and skips rather than sending again. This makes double-sends impossible even with concurrent workers or BullMQ retries.
+
+### How rate limiting is enforced
+
+Rate limiting is implemented with a Redis Lua script (`email-rate-limiter.service.ts`) executed via `EVAL`, which makes the whole check-and-increment operation atomic — safe across multiple worker processes or backend instances, since nothing relies on in-memory counters. The script:
+
+1. Reads the current hourly count for `email-rate:{senderId}:{hourWindowStart}` and the sender's next-allowed-send timestamp.
+2. If the hourly cap (`MAX_EMAILS_PER_HOUR_PER_SENDER`, configurable via env, or overridden per-campaign) is reached, or the minimum delay hasn't elapsed since the sender's last send, it returns "not allowed" plus the timestamp when a retry should be attempted — without sending.
+3. Otherwise, it atomically increments the hourly counter and reserves the next send slot, then returns "allowed."
+
+When a send is *not allowed*, the worker releases its DB processing lock (so the email goes back to `SCHEDULED`) and re-enqueues a new BullMQ job delayed until the returned retry time — so the email is rescheduled into the next available window instead of being dropped or hard-failed.
+
+### Behavior under load
+
+Scheduling 1000+ emails for the same start time creates 1000+ individually delayed BullMQ jobs (staggered by `delayMs` per recipient) rather than one giant job. When many jobs become eligible around the same time and exceed the hourly/delay limits, the rate limiter above pushes the excess into later windows automatically — throughput is bounded by `WORKER_CONCURRENCY`, `MIN_EMAIL_DELAY_MS`, and `MAX_EMAILS_PER_HOUR_PER_SENDER`, all configurable via env, with no code changes needed to tune behavior.
+
+---
+
+## ✅ Features Implemented
+
+**Backend**
+- [x] Scheduling via BullMQ delayed jobs (no cron)
+- [x] Persistence across restarts (Redis-backed queue + Postgres status tracking)
+- [x] Configurable worker concurrency
+- [x] Minimum delay between sends
+- [x] Per-sender hourly rate limiting, Redis-backed and multi-worker safe
+- [x] Automatic requeue into the next hour window on rate-limit hit
+- [x] Idempotent sends (DB status lock)
+- [x] Real Google OAuth 2.0 (Passport)
+- [x] Ethereal SMTP sending with preview URLs
+
+**Frontend**
+- [x] Google login → redirect to dashboard
+- [x] Header with name, email, avatar, logout
+- [x] Scheduled / Sent tabs with loading and empty states
+- [x] Compose modal: subject, rich-text body, CSV/TXT lead upload with parsed recipient count, start time, delay, hourly limit
+- [x] Live stats (scheduled / sent / failed)
+
+---
+
+## 🧪 Assumptions & Trade-offs
+
+* Ethereal Email is used exactly as specified — sent messages are not actually delivered; each has a viewable preview URL instead.
+* The hourly rate limit is enforced **per sender**, with a per-campaign `hourlyLimit` that is capped by the global `MAX_EMAILS_PER_HOUR_PER_SENDER` env var, whichever is lower.
+* Recipient lists are deduplicated and normalized (trimmed, lowercased) at both the CSV-parsing step and the scheduling step.
+* Failed sends (SMTP errors) are marked `FAILED` and left for BullMQ's built-in retry/backoff (3 attempts, exponential backoff) rather than being silently dropped.
+
+---
+
+## 👩‍💻 Author
+
+**Sejal P** — MCA, RV Institute of Technology and Management, Bangalore
