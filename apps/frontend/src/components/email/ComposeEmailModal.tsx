@@ -31,6 +31,8 @@ import {
   useState,
 } from "react";
 
+import { api } from "@/lib/api";
+
 interface ComposeEmailModalProps {
   open: boolean;
   onClose: () => void;
@@ -43,9 +45,7 @@ interface Sender {
   name: string | null;
 }
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:5000";
+
 
 /* =========================================================
    DATE HELPERS
@@ -196,17 +196,12 @@ export default function ComposeEmailModal({
         setError("");
 
         const response =
-          await fetch(
-            `${API_URL}/api/emails/senders`,
-            {
-              credentials: "include",
-            },
-          );
+          await api.get("/api/emails/senders");
 
         const result =
-          await response.json();
+          response.data;
 
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           throw new Error(
             result.error ??
               "Failed to load senders.",
@@ -599,46 +594,28 @@ export default function ComposeEmailModal({
     try {
       setSubmitting(true);
 
-      const response =
-        await fetch(
-          `${API_URL}/api/emails/schedule`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              senderId,
-              subject:
-                subject.trim(),
-              body: cleanedBody,
-              recipients:
-                finalRecipients,
-              startTime:
-                new Date(
-                  selectedStartTime,
-                ).toISOString(),
-              delayMs:
-                Number(delayMs),
-              hourlyLimit:
-                Number(
-                  hourlyLimit,
-                ),
-            }),
-          },
-        );
+      const response = await api.post(
+  "/api/emails/schedule",
+  {
+    senderId,
+    subject: subject.trim(),
+    body: cleanedBody,
+    recipients: finalRecipients,
+    startTime: new Date(
+      selectedStartTime,
+    ).toISOString(),
+    delayMs: Number(delayMs),
+    hourlyLimit: Number(hourlyLimit),
+  },
+);
 
-      const result =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.error ??
-            "Failed to schedule emails.",
-        );
-      }
+if (response.status < 200 || response.status >= 300) {
+  throw new Error(
+    response.data?.error ??
+      response.data?.message ??
+      "Failed to schedule emails.",
+  );
+}
 
       onScheduled?.();
 
