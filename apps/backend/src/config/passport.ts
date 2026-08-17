@@ -6,9 +6,12 @@ import { prisma } from "./database.js";
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientID:
+        process.env.GOOGLE_CLIENT_ID ?? "",
+
       clientSecret:
         process.env.GOOGLE_CLIENT_SECRET ?? "",
+
       callbackURL:
         process.env.GOOGLE_CALLBACK_URL ??
         "http://localhost:5000/api/auth/google/callback",
@@ -22,6 +25,7 @@ passport.use(
     ) => {
       try {
         const googleId = profile.id;
+
         const email =
           profile.emails?.[0]?.value;
 
@@ -36,42 +40,90 @@ passport.use(
         const name =
           profile.displayName ||
           profile.name?.givenName ||
-           email.split("@")[0] || "Google User";
+          email.split("@")[0] ||
+          "Google User";
 
         const avatar =
           profile.photos?.[0]?.value ?? null;
 
-        const user = await prisma.user.upsert({
+        /*
+         * Create or update the application user.
+         */
+        const user =
+          await prisma.user.upsert({
+            where: {
+              googleId,
+            },
+
+            update: {
+              name,
+              email,
+              avatar,
+            },
+
+            create: {
+              googleId,
+              name,
+              email,
+              avatar,
+            },
+          });
+
+        /*
+         * Ensure the logged-in user has an email sender.
+         *
+         * Your Sender model has:
+         *
+         * @@unique([userId, email])
+         *
+         * so Prisma generates the compound
+         * unique key: userId_email
+         */
+        await prisma.sender.upsert({
           where: {
-            googleId,
+            userId_email: {
+              userId: user.id,
+              email: user.email,
+            },
           },
 
           update: {
-            name,
-            email,
-            avatar,
+            name: user.name,
           },
 
           create: {
-            googleId,
-            name,
-            email,
-            avatar,
+            userId: user.id,
+            email: user.email,
+            name: user.name,
           },
         });
 
         return done(null, user);
       } catch (error) {
+        console.error(
+          "Google authentication error:",
+          error,
+        );
+
         return done(error);
       }
     },
   ),
 );
 
-passport.serializeUser((user: any, done) => {
-  done(null, user.id);
-});
+/**
+ * Store the user ID in the session.
+ */
+passport.serializeUser(
+  (user: any, done) => {
+    done(null, user.id);
+  },
+);
 
+/**
+ * Load the user from PostgreSQL when
+ * restoring the session.
+ */
 passport.deserializeUser(
   async (id: string, done) => {
     try {
@@ -86,9 +138,9 @@ passport.deserializeUser(
         return done(null, false);
       }
 
-      done(null, user);
+      return done(null, user);
     } catch (error) {
-      done(error);
+      return done(error);
     }
   },
 );
