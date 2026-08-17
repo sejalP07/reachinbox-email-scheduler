@@ -4,13 +4,17 @@ import { prisma } from "../config/database.js";
 import { scheduleEmails } from "../services/email-scheduler.service.js";
 import { scheduleEmailSchema } from "../utils/email.validation.js";
 
+/**
+ * Schedule emails
+ */
 export async function scheduleEmailsController(
   req: Request,
   res: Response,
 ) {
   try {
-    const input = scheduleEmailSchema.parse(req.body);
-
+    /**
+     * Authentication check
+     */
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -18,16 +22,60 @@ export async function scheduleEmailsController(
       });
     }
 
-    console.log("🔐 Authenticated user:", {
+    console.log(
+      "========== SCHEDULE REQUEST ==========",
+    );
+
+    console.log("Authenticated user:", {
       id: req.user.id,
       email: req.user.email,
     });
 
-    const userId = req.user.id;
+    console.log(
+      "Request body:",
+      JSON.stringify(req.body, null, 2),
+    );
 
-    const result = await scheduleEmails(
-      userId,
+    /**
+     * Validate request body with Zod.
+     *
+     * safeParse is used instead of parse so that
+     * validation errors can be returned to the frontend.
+     */
+    const parsed =
+      scheduleEmailSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      console.error(
+        "❌ Schedule validation failed:",
+        parsed.error.issues,
+      );
+
+      return res.status(400).json({
+        success: false,
+        error: "Invalid schedule request",
+        details: parsed.error.issues,
+      });
+    }
+
+    const input = parsed.data;
+
+    console.log(
+      "✅ Validated schedule input:",
       input,
+    );
+
+    /**
+     * Schedule the emails.
+     */
+    const result = await scheduleEmails(
+      req.user.id,
+      input,
+    );
+
+    console.log(
+      "✅ Emails scheduled successfully:",
+      result,
     );
 
     return res.status(201).json({
@@ -36,7 +84,7 @@ export async function scheduleEmailsController(
     });
   } catch (error) {
     console.error(
-      "Schedule email error:",
+      "❌ Schedule email error:",
       error,
     );
 
@@ -54,6 +102,9 @@ export async function scheduleEmailsController(
   }
 }
 
+/**
+ * Get scheduled emails
+ */
 export async function getScheduledEmailsController(
   req: Request,
   res: Response,
@@ -66,21 +117,24 @@ export async function getScheduledEmailsController(
       });
     }
 
-    const emails = await prisma.scheduledEmail.findMany({
-      where: {
-        campaign: {
-          userId: req.user.id,
+    const emails =
+      await prisma.scheduledEmail.findMany({
+        where: {
+          campaign: {
+            userId: req.user.id,
+          },
+          status: "SCHEDULED",
         },
-        status: "SCHEDULED",
-      },
-      include: {
-        sender: true,
-        campaign: true,
-      },
-      orderBy: {
-        scheduledAt: "asc",
-      },
-    });
+
+        include: {
+          sender: true,
+          campaign: true,
+        },
+
+        orderBy: {
+          scheduledAt: "asc",
+        },
+      });
 
     return res.status(200).json({
       success: true,
@@ -99,6 +153,9 @@ export async function getScheduledEmailsController(
   }
 }
 
+/**
+ * Get sent emails
+ */
 export async function getSentEmailsController(
   req: Request,
   res: Response,
@@ -111,21 +168,24 @@ export async function getSentEmailsController(
       });
     }
 
-    const emails = await prisma.scheduledEmail.findMany({
-      where: {
-        campaign: {
-          userId: req.user.id,
+    const emails =
+      await prisma.scheduledEmail.findMany({
+        where: {
+          campaign: {
+            userId: req.user.id,
+          },
+          status: "SENT",
         },
-        status: "SENT",
-      },
-      include: {
-        sender: true,
-        campaign: true,
-      },
-      orderBy: {
-        sentAt: "desc",
-      },
-    });
+
+        include: {
+          sender: true,
+          campaign: true,
+        },
+
+        orderBy: {
+          sentAt: "desc",
+        },
+      });
 
     return res.status(200).json({
       success: true,
@@ -144,6 +204,9 @@ export async function getSentEmailsController(
   }
 }
 
+/**
+ * Get email statistics
+ */
 export async function getEmailStatsController(
   req: Request,
   res: Response,
@@ -232,6 +295,10 @@ export async function getEmailStatsController(
     });
   }
 }
+
+/**
+ * Get configured senders
+ */
 export async function getSendersController(
   req: Request,
   res: Response,
@@ -244,19 +311,22 @@ export async function getSendersController(
       });
     }
 
-    const senders = await prisma.sender.findMany({
-      where: {
-        userId: req.user.id,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-      },
-    });
+    const senders =
+      await prisma.sender.findMany({
+        where: {
+          userId: req.user.id,
+        },
+
+        orderBy: {
+          createdAt: "asc",
+        },
+
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
 
     return res.status(200).json({
       success: true,
@@ -275,7 +345,9 @@ export async function getSendersController(
   }
 }
 
-
+/**
+ * Create sender
+ */
 export async function createSenderController(
   req: Request,
   res: Response,
@@ -290,7 +362,9 @@ export async function createSenderController(
 
     const email =
       typeof req.body.email === "string"
-        ? req.body.email.trim().toLowerCase()
+        ? req.body.email
+            .trim()
+            .toLowerCase()
         : "";
 
     const name =
@@ -339,6 +413,7 @@ export async function createSenderController(
           email,
           name: name || null,
         },
+
         select: {
           id: true,
           email: true,
